@@ -49,12 +49,20 @@ Cartrack and Resend variables aren't needed until Milestones 3 and 6.
 ### 4. Run migrations
 
 ```bash
-npm run db:push
+npm run db:migrate
 ```
 
-(`db:push` applies the schema directly — fine for a single-owner v1 with
-no other environments to keep in sync. `db:migrate` replays the checked-in
-SQL files in `drizzle/migrations` instead, if you'd rather do it that way.)
+**Note on Supabase's direct connection:** `db.<ref>.supabase.co` (port 5432)
+resolves to an **IPv6-only** address. If your network doesn't have outbound
+IPv6, use the **Session pooler** connection string instead (Project
+Settings → Database → Connection string) — it's IPv4-compatible. Also:
+`drizzle-kit push`/`drizzle-kit migrate` (the CLI commands) hung
+indefinitely against this project's pooler for reasons unrelated to the
+schema — a raw `postgres.js` query over the same connection worked
+instantly. `npm run db:migrate` runs `scripts/migrate.ts`, which uses
+`drizzle-orm`'s built-in migrator (same connection code as the app) instead
+of the CLI, and that's reliable. `db:generate` (schema → SQL diff, no live
+connection needed) still uses the `drizzle-kit` CLI — that one's fine.
 
 ### 5. Seed sample data
 
@@ -85,8 +93,7 @@ creates your `users` row and (if `db:seed` hasn't already) the organisation.
 | `npm run lint` | ESLint |
 | `npm test` / `npm run test:watch` | Vitest (run once / watch mode) |
 | `npm run db:generate` | Generate a migration from schema changes |
-| `npm run db:push` | Push the schema straight to the database |
-| `npm run db:migrate` | Apply checked-in migrations |
+| `npm run db:migrate` | Apply checked-in migrations (see the note above — not the `drizzle-kit` CLI) |
 | `npm run db:studio` | Drizzle Studio (browse the DB) |
 | `npm run db:seed` | Seed sample data (see above) |
 
