@@ -61,22 +61,22 @@ export function FleetOverview({ bikes }: { bikes: TodayBike[] }) {
 
       {/* Desktop: real table, not stacked cards (§6 density rule) */}
       <div className="hidden overflow-x-auto rounded-xl border border-border bg-surface-raised md:block">
-        <table className="w-full text-left text-sm">
+        <table className="w-full min-w-[640px] text-left text-sm">
           <thead>
             <tr className="border-b border-border text-xs text-text-secondary">
-              <th scope="col" className="px-4 py-3 font-medium">
+              <th scope="col" className="px-4 py-3 font-medium whitespace-nowrap">
                 Registration
               </th>
-              <th scope="col" className="px-4 py-3 font-medium">
+              <th scope="col" className="px-4 py-3 font-medium whitespace-nowrap">
                 Driver
               </th>
-              <th scope="col" className="px-4 py-3 text-right font-medium">
+              <th scope="col" className="px-4 py-3 text-right font-medium whitespace-nowrap">
                 Odometer
               </th>
-              <th scope="col" className="px-4 py-3 font-medium">
+              <th scope="col" className="px-4 py-3 font-medium whitespace-nowrap">
                 Status
               </th>
-              <th scope="col" className="px-4 py-3 font-medium">
+              <th scope="col" className="px-4 py-3 font-medium whitespace-nowrap">
                 Last reading
               </th>
             </tr>
@@ -84,20 +84,22 @@ export function FleetOverview({ bikes }: { bikes: TodayBike[] }) {
           <tbody>
             {bikes.map((bike) => (
               <tr key={bike.id} className="border-b border-border last:border-0">
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 whitespace-nowrap">
                   <p className="font-semibold text-foreground">{bike.registration}</p>
                   <p className="text-xs text-text-secondary">
                     {bike.make} {bike.model}
                   </p>
                 </td>
-                <td className="px-4 py-3 text-text-secondary">{bike.driverName ?? "Unassigned"}</td>
-                <td className="px-4 py-3 text-right font-medium text-foreground tabular-nums">
+                <td className="px-4 py-3 whitespace-nowrap text-text-secondary">
+                  {bike.driverName ?? "Unassigned"}
+                </td>
+                <td className="px-4 py-3 text-right font-medium whitespace-nowrap text-foreground tabular-nums">
                   {bike.latestOdometerKm !== null ? `${formatKmValue(bike.latestOdometerKm)} km` : "—"}
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 whitespace-nowrap">
                   <BikeStatusBadge status={bike.status} />
                 </td>
-                <td className="px-4 py-3 text-text-secondary">
+                <td className="px-4 py-3 whitespace-nowrap text-text-secondary">
                   {bike.latestOdometerAt ? formatDate(bike.latestOdometerAt) : "No readings"}
                 </td>
               </tr>
