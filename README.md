@@ -4,8 +4,9 @@ Fleet operations for a small scooter rental business — bike/driver registratio
 mileage tracking, kilometre-based service due dates, rent, and reminders.
 See `pitstop-claude-code-prompt.md` for the full v1 brief.
 
-Single-owner tool, magic-link auth, no multi-tenant UI. Currently on
-**Milestone 1: Foundation**.
+Single-owner tool, magic-link auth, no multi-tenant UI. Currently through
+**Milestone 3: Mileage** (foundation, fleet/driver CRUD + handover photos,
+Cartrack sync all done).
 
 ## Stack
 
@@ -25,8 +26,8 @@ npm install
 1. [supabase.com/dashboard](https://supabase.com/dashboard) → New project.
 2. **Project Settings → API** → copy the Project URL, `anon` key, and
    `service_role` key.
-3. **Project Settings → Database** → copy the direct connection string
-   (port 5432) for local dev.
+3. **Project Settings → Database** → copy the **Session pooler**
+   connection string (not the direct one — see the note under step 4).
 4. **Authentication → Sign In / Providers** → make sure **Email** (magic
    link / OTP, not password) is enabled.
 5. **Authentication → URL Configuration** → set Site URL to
@@ -43,8 +44,16 @@ Fill in the Supabase values from step 2, plus:
 
 - `OWNER_EMAIL` — the only address allowed to request a magic link.
 - `NEXT_PUBLIC_SITE_URL` — `http://localhost:3000` for local dev.
+- `CRON_SECRET` — any random string (`openssl rand -hex 32`). Vercel signs
+  scheduled cron requests with it in production; locally it's just what
+  you pass in the `Authorization: Bearer ...` header when testing the
+  cron route by hand.
+- `CARTRACK_USERNAME` / `CARTRACK_PASSWORD` — optional. Without them the
+  mileage-sync cron returns a clean error instead of the app breaking
+  (§5: "the app must work fully without Cartrack"). `CARTRACK_BASE_URL`
+  defaults to South Africa's endpoint in `.env.example`.
 
-Cartrack and Resend variables aren't needed until Milestones 3 and 6.
+Resend isn't needed until Milestone 6.
 
 ### 4. Run migrations
 
@@ -74,7 +83,16 @@ Creates the org, 2 bikes, 2 drivers, 2 open assignments, the 7 default
 service types, and 60 days of plausible odometer history. Safe to re-run —
 it's a no-op if the org already has bikes.
 
-### 6. Sign in
+### 6. Create the Storage bucket
+
+```bash
+npm run storage:setup
+```
+
+Creates the private `handover-photos` bucket (assignment condition
+photos). Safe to re-run — no-ops if it already exists.
+
+### 7. Sign in
 
 ```bash
 npm run dev
@@ -83,6 +101,18 @@ npm run dev
 Open [http://localhost:3000](http://localhost:3000), request a magic link
 with `OWNER_EMAIL`, and click the link in your inbox. The first sign-in
 creates your `users` row and (if `db:seed` hasn't already) the organisation.
+
+### 8. Test the mileage-sync cron locally (optional)
+
+Vercel doesn't run your `vercel.json` cron schedule locally — trigger it
+by hand instead:
+
+```bash
+curl -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/mileage-sync
+```
+
+Without `CARTRACK_USERNAME`/`CARTRACK_PASSWORD` set, this returns a clean
+500 explaining Cartrack isn't configured — that's expected, not a bug.
 
 ## Scripts
 
@@ -96,6 +126,7 @@ creates your `users` row and (if `db:seed` hasn't already) the organisation.
 | `npm run db:migrate` | Apply checked-in migrations (see the note above — not the `drizzle-kit` CLI) |
 | `npm run db:studio` | Drizzle Studio (browse the DB) |
 | `npm run db:seed` | Seed sample data (see above) |
+| `npm run storage:setup` | Create the handover-photos Storage bucket |
 
 ## Deploying to Vercel
 
@@ -108,8 +139,10 @@ creates your `users` row and (if `db:seed` hasn't already) the organisation.
    - `NEXT_PUBLIC_SITE_URL` → your production URL.
 3. Add the production URL to Supabase's **Authentication → URL
    Configuration → Redirect URLs**.
-4. Vercel Cron jobs (nightly Cartrack sync, weekly rent charges, reminder
-   sweep) land in their respective milestones — none are wired up yet.
+4. The nightly mileage-sync cron (`vercel.json`, 02:00 SAST) picks up
+   automatically on deploy — Vercel signs its requests with `CRON_SECRET`
+   for you, nothing else to configure. Weekly rent charges and the
+   reminder sweep land in their own later milestones.
 
 ## Notes for whoever maintains this next
 
@@ -124,6 +157,19 @@ creates your `users` row and (if `db:seed` hasn't already) the organisation.
   `src/lib/format.ts` and `src/lib/action-items.ts`. The timezone
   conversion isn't optional decoration; a naive local-time day
   calculation gives wrong answers near midnight SAST (caught by a test).
+- **Telematics** goes through the `TelematicsProvider` interface
+  (`src/lib/telematics/types.ts`) — `CartrackProvider` and
+  `ManualProvider` both implement it, so swapping trackers later means
+  writing a new provider, not touching the sync job. The nightly sync
+  only ever calls the provider for bikes that have a
+  `cartrack_vehicle_id`; it never invokes `ManualProvider` (which always
+  returns "not supported") since a bike with no tracker isn't a sync
+  failure worth alerting on.
+- **`/api/*` routes are excluded from the auth proxy** (`src/proxy.ts`)
+  — they authenticate themselves (the cron routes check a Bearer token)
+  and must return JSON on failure, never an HTML redirect to `/login`.
+  Keep any new route under `/api/` out of the cookie-session gate for
+  the same reason.
 - **Next.js 16**: `middleware.ts` is renamed `proxy.ts`/`proxy()` (see
   `src/proxy.ts`); `params`/`searchParams`/`cookies()`/`headers()` are
   async-only, no sync fallback. If an AI agent's training data predates
