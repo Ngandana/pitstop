@@ -12,6 +12,11 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    // /api/* is excluded — those routes authenticate themselves (e.g. the
+    // cron routes check a Bearer token) and must return JSON, never an
+    // HTML redirect to /login. Caught live: without this, an unauthenticated
+    // request to /api/cron/mileage-sync got a 307 to /login before the
+    // route handler's own auth check ever ran.
+    "/((?!_next/static|_next/image|favicon.ico|api/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
