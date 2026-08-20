@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronLeft, Pencil, UserPlus } from "lucide-react";
+import { AlertTriangle, ChevronLeft, Pencil, Satellite, UserPlus } from "lucide-react";
 import { getBikeDetail } from "@/lib/queries/fleet";
 import { BikeStatusBadge } from "@/components/bike-status-badge";
 import { StatusChangeForm } from "@/components/fleet/status-change-form";
+import { ManualOdometerForm } from "@/components/fleet/manual-odometer-form";
+import { MileageChart } from "@/components/fleet/mileage-chart";
 import { EndAssignmentForm } from "@/components/assignments/end-assignment-form";
 import { formatCents, formatDate, formatDateTime, formatKm } from "@/lib/format";
 
@@ -14,8 +16,16 @@ export default async function BikeDetailPage({ params }: PageProps<"/fleet/[id]"
   const detail = await getBikeDetail(id);
   if (!detail) notFound();
 
-  const { bike, openAssignment, assignments, statusHistory, recentReadings, schedules, latestOdometerKm } =
-    detail;
+  const {
+    bike,
+    openAssignment,
+    assignments,
+    statusHistory,
+    recentReadings,
+    schedules,
+    latestOdometerKm,
+    lastSyncAttempt,
+  } = detail;
 
   return (
     <div className="flex flex-col gap-6">
@@ -121,14 +131,35 @@ export default async function BikeDetailPage({ params }: PageProps<"/fleet/[id]"
             )}
           </section>
 
-          {/* Odometer readings */}
+          {/* Mileage */}
           <section className="rounded-xl border border-border bg-surface-raised p-5">
-            <h2 className="mb-3 text-sm font-semibold text-foreground">Recent odometer readings</h2>
-            {recentReadings.length === 0 ? (
-              <p className="text-sm text-text-secondary">No readings recorded yet.</p>
-            ) : (
-              <ul className="flex flex-col divide-y divide-border">
-                {recentReadings.map((r) => (
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold text-foreground">Mileage</h2>
+              <span className="inline-flex items-center gap-1.5 text-xs text-text-secondary">
+                <Satellite className="size-3.5" aria-hidden="true" />
+                {bike.cartrackVehicleId ? "Synced via Cartrack" : "No tracker linked — manual only"}
+              </span>
+            </div>
+
+            {lastSyncAttempt && !lastSyncAttempt.succeeded ? (
+              <div className="mb-4 flex items-start gap-2 rounded-lg border border-warning/30 bg-warning-surface p-3 text-sm">
+                <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden="true" />
+                <div>
+                  <p className="font-medium text-foreground">Last Cartrack sync didn&apos;t land</p>
+                  <p className="text-xs text-text-secondary">{lastSyncAttempt.error}</p>
+                </div>
+              </div>
+            ) : null}
+
+            <MileageChart readings={recentReadings.map((r) => ({ km: r.readingKm, at: r.recordedAt }))} />
+
+            <div className="mt-4 border-t border-border pt-4">
+              <ManualOdometerForm bikeId={bike.id} />
+            </div>
+
+            {recentReadings.length > 0 ? (
+              <ul className="mt-4 flex max-h-64 flex-col divide-y divide-border overflow-y-auto border-t border-border">
+                {recentReadings.slice(0, 10).map((r) => (
                   <li key={r.id} className="flex items-center justify-between py-2 text-sm">
                     <span className="text-text-secondary">{formatDateTime(r.recordedAt)}</span>
                     <span className="font-medium text-foreground tabular-nums">
@@ -138,7 +169,7 @@ export default async function BikeDetailPage({ params }: PageProps<"/fleet/[id]"
                   </li>
                 ))}
               </ul>
-            )}
+            ) : null}
           </section>
         </div>
 

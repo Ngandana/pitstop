@@ -70,6 +70,10 @@ export const bikeFormSchema = z.object({
 
 export type BikeFormInput = z.infer<typeof bikeFormSchema>;
 
+export const manualOdometerSchema = z.object({
+  readingKm: z.coerce.number().int().nonnegative().max(500_000),
+});
+
 export const bikeStatusChangeSchema = z.object({
   status: z.enum(bikeStatusEnum.enumValues),
   reason: z

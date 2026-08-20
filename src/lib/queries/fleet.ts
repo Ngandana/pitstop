@@ -8,6 +8,7 @@ import {
   odometerReadings,
   serviceSchedules,
   serviceTypes,
+  telematicsSyncLog,
 } from "@/db/schema";
 import type { TodayBike } from "@/lib/queries/today";
 
@@ -52,7 +53,7 @@ export async function getBikeDetail(bikeId: string) {
   const bike = await db.query.bikes.findFirst({ where: eq(bikes.id, bikeId) });
   if (!bike) return null;
 
-  const [assignmentRows, statusHistory, recentReadings, schedules] = await Promise.all([
+  const [assignmentRows, statusHistory, recentReadings, schedules, lastSyncAttempt] = await Promise.all([
     db
       .select({
         id: assignments.id,
@@ -80,7 +81,7 @@ export async function getBikeDetail(bikeId: string) {
       .from(odometerReadings)
       .where(eq(odometerReadings.bikeId, bikeId))
       .orderBy(desc(odometerReadings.recordedAt))
-      .limit(20),
+      .limit(90), // enough history for the mileage chart; the list view only shows the first 10
     db
       .select({
         id: serviceSchedules.id,
@@ -94,6 +95,12 @@ export async function getBikeDetail(bikeId: string) {
       .from(serviceSchedules)
       .innerJoin(serviceTypes, eq(serviceTypes.id, serviceSchedules.serviceTypeId))
       .where(eq(serviceSchedules.bikeId, bikeId)),
+    db
+      .select()
+      .from(telematicsSyncLog)
+      .where(eq(telematicsSyncLog.bikeId, bikeId))
+      .orderBy(desc(telematicsSyncLog.attemptedAt))
+      .limit(1),
   ]);
 
   const openAssignment = assignmentRows.find((a) => a.endedAt === null) ?? null;
@@ -107,5 +114,6 @@ export async function getBikeDetail(bikeId: string) {
     recentReadings,
     schedules,
     latestOdometerKm: latestOdometer?.readingKm ?? null,
+    lastSyncAttempt: lastSyncAttempt[0] ?? null,
   };
 }

@@ -8,3 +8,4 @@ export * from "./odometer-readings";
 export * from "./servicing";
 export * from "./money";
 export * from "./reminders";
+export * from "./telematics";

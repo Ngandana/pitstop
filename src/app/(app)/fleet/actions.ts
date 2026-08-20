@@ -2,13 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { bikes, bikeStatusHistory, odometerReadings } from "@/db/schema";
-import { bikeFormSchema, bikeStatusChangeSchema } from "@/lib/validation/bikes";
+import { bikeFormSchema, bikeStatusChangeSchema, manualOdometerSchema } from "@/lib/validation/bikes";
 import { getCurrentOrg } from "@/lib/queries/org";
 import { createDefaultServiceSchedules } from "@/lib/servicing/schedules";
 import { changeBikeStatus } from "@/lib/bikes/status";
+import { validateOdometerReading } from "@/lib/telematics/validate-odometer";
 
 export type FormResult = { ok: true } | { ok: false; error: string; fieldErrors?: Record<string, string> };
 
@@ -182,6 +183,56 @@ export async function updateBikeStatus(
     });
   } catch {
     return { ok: false, error: "Couldn't update status. Try again." };
+  }
+
+  revalidatePath(`/fleet/${bikeId}`);
+  revalidatePath("/fleet");
+  revalidatePath("/");
+  return { ok: true };
+}
+
+/** §5 fallback path: the owner enters a reading by hand when Cartrack can't. */
+export async function recordManualOdometerReading(
+  bikeId: string,
+  _prev: FormResult | null,
+  formData: FormData,
+): Promise<FormResult> {
+  const parsed = manualOdometerSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid reading." };
+  }
+  const override = formData.get("override") === "on";
+
+  const org = await getCurrentOrg();
+  const [latest] = await db
+    .select({ km: odometerReadings.readingKm })
+    .from(odometerReadings)
+    .where(eq(odometerReadings.bikeId, bikeId))
+    .orderBy(desc(odometerReadings.recordedAt))
+    .limit(1);
+
+  const validation = validateOdometerReading({
+    previousKm: latest?.km ?? null,
+    newKm: parsed.data.readingKm,
+    override,
+  });
+  if (!validation.valid) {
+    return {
+      ok: false,
+      error: `${validation.reason} Tick "I'm sure this is correct" to save it anyway.`,
+    };
+  }
+
+  try {
+    await db.insert(odometerReadings).values({
+      orgId: org.id,
+      bikeId,
+      readingKm: parsed.data.readingKm,
+      source: "manual",
+      overrideFlag: override,
+    });
+  } catch {
+    return { ok: false, error: "Couldn't save the reading. Try again." };
   }
 
   revalidatePath(`/fleet/${bikeId}`);
