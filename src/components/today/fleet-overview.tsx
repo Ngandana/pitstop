@@ -1,10 +1,15 @@
+"use client";
+
 import { Bike } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { TodayBike } from "@/lib/queries/today";
 import { BikeStatusBadge } from "@/components/bike-status-badge";
 import { formatKmValue, formatDate } from "@/lib/format";
 
 export function FleetOverview({ bikes }: { bikes: TodayBike[] }) {
+  const router = useRouter();
+
   if (bikes.length === 0) {
     return (
       <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border py-16 text-center">
@@ -14,10 +19,10 @@ export function FleetOverview({ bikes }: { bikes: TodayBike[] }) {
           rent.
         </p>
         <Link
-          href="/fleet"
+          href="/fleet/new"
           className="mt-1 inline-flex h-11 items-center rounded-lg bg-accent px-4 text-sm font-medium text-accent-foreground transition-colors duration-150 hover:bg-accent/90"
         >
-          Go to Fleet
+          Add your first bike
         </Link>
       </div>
     );
@@ -28,33 +33,35 @@ export function FleetOverview({ bikes }: { bikes: TodayBike[] }) {
       {/* Mobile / tablet: cards */}
       <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:hidden">
         {bikes.map((bike) => (
-          <li
-            key={bike.id}
-            className="rounded-xl border border-border bg-surface-raised p-4 shadow-sm"
-          >
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <p className="text-base font-bold tracking-tight text-foreground">
-                  {bike.registration}
-                </p>
-                <p className="text-xs text-text-secondary">
-                  {bike.make} {bike.model}
-                </p>
+          <li key={bike.id}>
+            <Link
+              href={`/fleet/${bike.id}`}
+              className="block rounded-xl border border-border bg-surface-raised p-4 shadow-sm transition-colors duration-150 hover:border-accent/40"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-base font-bold tracking-tight text-foreground">
+                    {bike.registration}
+                  </p>
+                  <p className="text-xs text-text-secondary">
+                    {bike.make} {bike.model}
+                  </p>
+                </div>
+                <BikeStatusBadge status={bike.status} />
               </div>
-              <BikeStatusBadge status={bike.status} />
-            </div>
 
-            <p className="mt-4 text-stat text-foreground">
-              {bike.latestOdometerKm !== null ? formatKmValue(bike.latestOdometerKm) : "—"}
-              <span className="ml-1 text-sm font-normal text-text-secondary">km</span>
-            </p>
+              <p className="mt-4 text-stat text-foreground">
+                {bike.latestOdometerKm !== null ? formatKmValue(bike.latestOdometerKm) : "—"}
+                <span className="ml-1 text-sm font-normal text-text-secondary">km</span>
+              </p>
 
-            <div className="mt-3 flex items-center justify-between text-xs text-text-secondary">
-              <span>{bike.driverName ?? "Unassigned"}</span>
-              <span>
-                {bike.latestOdometerAt ? formatDate(bike.latestOdometerAt) : "No readings"}
-              </span>
-            </div>
+              <div className="mt-3 flex items-center justify-between text-xs text-text-secondary">
+                <span>{bike.driverName ?? "Unassigned"}</span>
+                <span>
+                  {bike.latestOdometerAt ? formatDate(bike.latestOdometerAt) : "No readings"}
+                </span>
+              </div>
+            </Link>
           </li>
         ))}
       </ul>
@@ -83,9 +90,18 @@ export function FleetOverview({ bikes }: { bikes: TodayBike[] }) {
           </thead>
           <tbody>
             {bikes.map((bike) => (
-              <tr key={bike.id} className="border-b border-border last:border-0">
+              <tr
+                key={bike.id}
+                onClick={() => router.push(`/fleet/${bike.id}`)}
+                className="cursor-pointer border-b border-border transition-colors duration-150 last:border-0 hover:bg-surface-sunken"
+              >
                 <td className="px-4 py-3 whitespace-nowrap">
-                  <p className="font-semibold text-foreground">{bike.registration}</p>
+                  <Link
+                    href={`/fleet/${bike.id}`}
+                    className="font-semibold text-foreground hover:text-accent"
+                  >
+                    {bike.registration}
+                  </Link>
                   <p className="text-xs text-text-secondary">
                     {bike.make} {bike.model}
                   </p>
