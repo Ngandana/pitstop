@@ -4,9 +4,10 @@ Fleet operations for a small scooter rental business — bike/driver registratio
 mileage tracking, kilometre-based service due dates, rent, and reminders.
 See `pitstop-claude-code-prompt.md` for the full v1 brief.
 
-Single-owner tool, magic-link auth, no multi-tenant UI. Currently through
-**Milestone 3: Mileage** (foundation, fleet/driver CRUD + handover photos,
-Cartrack sync all done).
+Single-owner tool, magic-link auth, no multi-tenant UI. Milestones 1–6 are
+done (foundation, fleet/driver CRUD + handover photos, Cartrack sync,
+servicing, rent/payments/ledger, reminders outbox) — Milestone 7 (polish
+pass) is in progress.
 
 ## Stack
 
@@ -52,8 +53,12 @@ Fill in the Supabase values from step 2, plus:
   mileage-sync cron returns a clean error instead of the app breaking
   (§5: "the app must work fully without Cartrack"). `CARTRACK_BASE_URL`
   defaults to South Africa's endpoint in `.env.example`.
-
-Resend isn't needed until Milestone 6.
+- `RESEND_API_KEY` — optional. Without it the reminders-sweep cron marks
+  each pending email as a failed attempt (recorded, not crashed) instead
+  of the app breaking, same philosophy as Cartrack above. `RESEND_FROM_ADDRESS`
+  defaults to `onboarding@resend.dev`, which works with zero setup but only
+  delivers to the Resend account's own verified address — fine for
+  developing the pipeline before a real sending domain is verified.
 
 ### 4. Run migrations
 
@@ -102,17 +107,24 @@ Open [http://localhost:3000](http://localhost:3000), request a magic link
 with `OWNER_EMAIL`, and click the link in your inbox. The first sign-in
 creates your `users` row and (if `db:seed` hasn't already) the organisation.
 
-### 8. Test the mileage-sync cron locally (optional)
+### 8. Test the crons locally (optional)
 
-Vercel doesn't run your `vercel.json` cron schedule locally — trigger it
-by hand instead:
+Vercel doesn't run your `vercel.json` cron schedules locally — trigger
+them by hand instead:
 
 ```bash
 curl -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/mileage-sync
+curl -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/rent-charges
+curl -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/reminders-generate
+curl -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/reminders-sweep
 ```
 
-Without `CARTRACK_USERNAME`/`CARTRACK_PASSWORD` set, this returns a clean
-500 explaining Cartrack isn't configured — that's expected, not a bug.
+Without `CARTRACK_USERNAME`/`CARTRACK_PASSWORD` set, mileage-sync returns
+a clean 500 explaining Cartrack isn't configured. Without `RESEND_API_KEY`
+set, reminders-sweep returns 200 but marks every pending email as a failed
+attempt. Both are expected, not bugs — always run reminders-generate
+before reminders-sweep, since sweep only sends what generate has already
+queued.
 
 ## Scripts
 
@@ -139,10 +151,10 @@ Without `CARTRACK_USERNAME`/`CARTRACK_PASSWORD` set, this returns a clean
    - `NEXT_PUBLIC_SITE_URL` → your production URL.
 3. Add the production URL to Supabase's **Authentication → URL
    Configuration → Redirect URLs**.
-4. The nightly mileage-sync cron (`vercel.json`, 02:00 SAST) picks up
-   automatically on deploy — Vercel signs its requests with `CRON_SECRET`
-   for you, nothing else to configure. Weekly rent charges and the
-   reminder sweep land in their own later milestones.
+4. All four crons (`vercel.json`) pick up automatically on deploy — Vercel
+   signs their requests with `CRON_SECRET` for you, nothing else to
+   configure: mileage-sync (02:00 SAST), rent-charges (06:00 SAST),
+   reminders-generate (07:30 SAST), reminders-sweep (08:00 SAST).
 
 ## Notes for whoever maintains this next
 
@@ -165,6 +177,17 @@ Without `CARTRACK_USERNAME`/`CARTRACK_PASSWORD` set, this returns a clean
   `cartrack_vehicle_id`; it never invokes `ManualProvider` (which always
   returns "not supported") since a bike with no tracker isn't a sync
   failure worth alerting on.
+- **Reminders are an outbox, not a send-immediately call.** The
+  reminders-generate cron only ever writes rows to `reminders`; the
+  separate reminders-sweep cron reads pending `email` rows and sends
+  them. Never call `sendEmail` directly from generation logic — every
+  new trigger should write to the outbox with a `dedupe_key` (and
+  remember `reminders_dedupe` is a *partial* unique index, so
+  `onConflictDoNothing` needs a matching `where` clause or Postgres
+  rejects it — see `src/lib/reminders/generate.ts`). Driver-facing
+  reminders don't send themselves either: `wa.me` "Send to driver"
+  buttons are the only delivery mechanism to a driver, by design (§5) —
+  don't wire up a messaging API.
 - **`/api/*` routes are excluded from the auth proxy** (`src/proxy.ts`)
   — they authenticate themselves (the cron routes check a Bearer token)
   and must return JSON on failure, never an HTML redirect to `/login`.
