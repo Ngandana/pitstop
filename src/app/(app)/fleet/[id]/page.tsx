@@ -6,6 +6,8 @@ import { BikeStatusBadge } from "@/components/bike-status-badge";
 import { StatusChangeForm } from "@/components/fleet/status-change-form";
 import { ManualOdometerForm } from "@/components/fleet/manual-odometer-form";
 import { MileageChart } from "@/components/fleet/mileage-chart";
+import { ServiceScheduleList } from "@/components/fleet/service-schedule-list";
+import { LogServiceForm } from "@/components/fleet/log-service-form";
 import { EndAssignmentForm } from "@/components/assignments/end-assignment-form";
 import { formatCents, formatDate, formatDateTime, formatKm } from "@/lib/format";
 
@@ -23,6 +25,7 @@ export default async function BikeDetailPage({ params }: PageProps<"/fleet/[id]"
     statusHistory,
     recentReadings,
     schedules,
+    serviceHistory,
     latestOdometerKm,
     lastSyncAttempt,
   } = detail;
@@ -171,6 +174,33 @@ export default async function BikeDetailPage({ params }: PageProps<"/fleet/[id]"
               </ul>
             ) : null}
           </section>
+
+          {/* Service history */}
+          <section className="rounded-xl border border-border bg-surface-raised p-5">
+            <h2 className="mb-3 text-sm font-semibold text-foreground">Service history</h2>
+            {serviceHistory.length === 0 ? (
+              <p className="text-sm text-text-secondary">No services logged yet.</p>
+            ) : (
+              <ul className="flex flex-col divide-y divide-border">
+                {serviceHistory.map((s) => (
+                  <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
+                    <div>
+                      <p className="font-medium text-foreground">{s.label}</p>
+                      <p className="text-xs text-text-secondary">
+                        {formatDate(s.performedAt)} at {formatKm(s.odometerKm)}
+                        {s.workshopName ? ` · ${s.workshopName}` : ""}
+                      </p>
+                    </div>
+                    {s.costCents !== null ? (
+                      <p className="text-sm text-text-secondary tabular-nums">
+                        {formatCents(s.costCents)}
+                      </p>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
         </div>
 
         <div className="flex flex-col gap-6">
@@ -180,20 +210,16 @@ export default async function BikeDetailPage({ params }: PageProps<"/fleet/[id]"
             <StatusChangeForm bikeId={bike.id} currentStatus={bike.status} />
           </section>
 
-          {/* Service schedules (read-only — due calc lands in Milestone 4) */}
+          {/* Service schedule */}
           <section className="rounded-xl border border-border bg-surface-raised p-5">
-            <h2 className="mb-3 text-sm font-semibold text-foreground">Service schedule</h2>
-            <ul className="flex flex-col divide-y divide-border">
-              {schedules.map((s) => (
-                <li key={s.id} className="py-2 text-sm">
-                  <p className="font-medium text-foreground">{s.label}</p>
-                  <p className="text-xs text-text-secondary">
-                    Every {s.intervalKm.toLocaleString()} km or {s.maxIntervalDays} days · last at{" "}
-                    {formatKm(s.lastServiceKm)} ({formatDate(s.lastServiceAt)})
-                  </p>
-                </li>
-              ))}
-            </ul>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold text-foreground">Service schedule</h2>
+              <LogServiceForm
+                bikeId={bike.id}
+                serviceTypes={schedules.map((s) => ({ serviceTypeId: s.serviceTypeId, label: s.label }))}
+              />
+            </div>
+            <ServiceScheduleList schedules={schedules} />
           </section>
 
           {/* Status history */}

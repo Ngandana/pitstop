@@ -32,12 +32,15 @@ export default async function TodayPage() {
           </div>
         ) : (
           <ul className="flex flex-col gap-2">
-            {actionItems.map((item) => (
-              <ActionItemCard
-                key={`${item.kind}-${item.kind === "licence_expiring" ? item.driverId : item.bikeId}`}
-                item={item}
-              />
-            ))}
+            {actionItems.map((item) => {
+              const key =
+                item.kind === "licence_expiring"
+                  ? `licence-${item.driverId}`
+                  : item.kind === "service"
+                    ? `service-${item.bikeId}-${item.serviceLabel}`
+                    : `stalled-${item.bikeId}`;
+              return <ActionItemCard key={key} item={item} />;
+            })}
           </ul>
         )}
       </section>

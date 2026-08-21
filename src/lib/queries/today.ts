@@ -3,6 +3,8 @@ import { db } from "@/db";
 import { assignments, bikes, drivers, odometerReadings } from "@/db/schema";
 import type { bikeStatusEnum } from "@/db/schema";
 import { daysUntil, hasBikeStalled } from "@/lib/action-items";
+import { getDueServicesForOrg, getMostUrgentServiceStatusPerBike } from "@/lib/queries/servicing";
+import type { ServiceStatus } from "@/lib/servicing/due-calc";
 
 export type TodayBike = {
   id: string;
@@ -13,6 +15,11 @@ export type TodayBike = {
   driverName: string | null;
   latestOdometerKm: number | null;
   latestOdometerAt: Date | null;
+  nextService: {
+    label: string;
+    status: ServiceStatus;
+    kmRemaining: number | null;
+  } | null;
 };
 
 export type ActionItem =
@@ -29,6 +36,14 @@ export type ActionItem =
       bikeId: string;
       registration: string;
       lastReadingAt: Date;
+    }
+  | {
+      kind: "service";
+      bikeId: string;
+      registration: string;
+      serviceLabel: string;
+      status: Extract<ServiceStatus, "warning" | "due" | "overdue">;
+      kmRemaining: number | null;
     };
 
 export type TodayData = {
@@ -37,13 +52,7 @@ export type TodayData = {
   actionItems: ActionItem[];
 };
 
-/**
- * Everything the Today screen needs, in one call. Milestone 1 only wires
- * up what's genuinely available this early: bikes/drivers/odometer data,
- * and the two action-item kinds that don't depend on later milestones'
- * cron jobs (service due-calc lands in Milestone 4, rent arrears in
- * Milestone 5 — see the brief's build order).
- */
+/** Everything the Today screen needs, in one call. */
 export async function getTodayData(): Promise<TodayData> {
   const org = await db.query.organisations.findFirst();
   if (!org) {
@@ -57,6 +66,8 @@ export async function getTodayData(): Promise<TodayData> {
 
   const now = new Date();
   const actionItems: ActionItem[] = [];
+
+  const nextServiceByBike = await getMostUrgentServiceStatusPerBike(org.id);
 
   const bikeDetails = await Promise.all(
     bikeRows.map(async (bike) => {
@@ -85,6 +96,8 @@ export async function getTodayData(): Promise<TodayData> {
         });
       }
 
+      const nextService = nextServiceByBike.get(bike.id);
+
       const result: TodayBike = {
         id: bike.id,
         registration: bike.registration,
@@ -94,6 +107,9 @@ export async function getTodayData(): Promise<TodayData> {
         driverName: openAssignment?.driverName ?? null,
         latestOdometerKm: latest?.km ?? null,
         latestOdometerAt: latest?.at ?? null,
+        nextService: nextService
+          ? { label: nextService.label, status: nextService.status, kmRemaining: nextService.kmRemaining }
+          : null,
       };
       return result;
     }),
@@ -119,10 +135,35 @@ export async function getTodayData(): Promise<TodayData> {
     }
   }
 
-  actionItems.sort((a, b) => {
-    const rank = (item: ActionItem) => (item.kind === "licence_expiring" ? item.daysUntil : 999);
-    return rank(a) - rank(b);
-  });
+  const dueServices = await getDueServicesForOrg(org.id);
+  for (const s of dueServices) {
+    if (s.status === "ok") continue;
+    actionItems.push({
+      kind: "service",
+      bikeId: s.bikeId,
+      registration: s.registration,
+      serviceLabel: s.label,
+      status: s.status,
+      kmRemaining: s.kmRemaining,
+    });
+  }
+
+  // Urgency order: a stranded/overdue bike outranks everything else, then
+  // due services, then a bike that's gone quiet, then licences (soonest
+  // first), then services that are merely trending toward due.
+  const KIND_RANK: Record<string, number> = {
+    "service:overdue": 0,
+    "service:due": 1,
+    bike_not_moving: 2,
+    licence_expiring: 3,
+    "service:warning": 4,
+  };
+  const rank = (item: ActionItem) => {
+    if (item.kind === "service") return KIND_RANK[`service:${item.status}`];
+    if (item.kind === "licence_expiring") return KIND_RANK.licence_expiring + item.daysUntil / 1000;
+    return KIND_RANK[item.kind];
+  };
+  actionItems.sort((a, b) => rank(a) - rank(b));
 
   return { orgName: org.name, bikes: bikeDetails, actionItems };
 }

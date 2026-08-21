@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { TodayBike } from "@/lib/queries/today";
 import { BikeStatusBadge } from "@/components/bike-status-badge";
+import { ServiceIndicator } from "@/components/fleet/service-indicator";
 import { formatKmValue, formatDate } from "@/lib/format";
 
 export function FleetOverview({ bikes }: { bikes: TodayBike[] }) {
@@ -61,6 +62,10 @@ export function FleetOverview({ bikes }: { bikes: TodayBike[] }) {
                   {bike.latestOdometerAt ? formatDate(bike.latestOdometerAt) : "No readings"}
                 </span>
               </div>
+
+              <div className="mt-2 border-t border-border pt-2">
+                <ServiceIndicator nextService={bike.nextService} />
+              </div>
             </Link>
           </li>
         ))}
@@ -82,6 +87,9 @@ export function FleetOverview({ bikes }: { bikes: TodayBike[] }) {
               </th>
               <th scope="col" className="px-4 py-3 font-medium whitespace-nowrap">
                 Status
+              </th>
+              <th scope="col" className="px-4 py-3 font-medium whitespace-nowrap">
+                Next service
               </th>
               <th scope="col" className="px-4 py-3 font-medium whitespace-nowrap">
                 Last reading
@@ -114,6 +122,9 @@ export function FleetOverview({ bikes }: { bikes: TodayBike[] }) {
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap">
                   <BikeStatusBadge status={bike.status} />
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap">
+                  <ServiceIndicator nextService={bike.nextService} />
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-text-secondary">
                   {bike.latestOdometerAt ? formatDate(bike.latestOdometerAt) : "No readings"}
