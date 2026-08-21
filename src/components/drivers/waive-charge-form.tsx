@@ -46,7 +46,7 @@ export function WaiveChargeForm({
       <DialogTrigger asChild>
         <button
           type="button"
-          className="text-xs font-medium text-text-muted underline-offset-2 transition-colors duration-150 hover:text-foreground hover:underline"
+          className="cursor-pointer text-xs font-medium text-text-muted underline-offset-2 transition-colors duration-150 hover:text-foreground hover:underline"
         >
           Waive
         </button>

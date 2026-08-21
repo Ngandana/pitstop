@@ -1,25 +1,26 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { magicLinkRequestSchema } from "@/lib/validation/auth";
 
 export type MagicLinkResult = { ok: true } | { ok: false; error: string };
 
 /**
  * Single-owner account: only the configured OWNER_EMAIL may request a
  * magic link. Any other address gets the same generic response either
- * way, so this doesn't double as an email-enumeration oracle.
+ * way, so this doesn't double as an email-enumeration oracle. (Format
+ * validation errors below are about input shape, not account existence,
+ * so returning them directly doesn't reopen that oracle.)
  */
 export async function requestMagicLink(
   _prev: MagicLinkResult | null,
   formData: FormData,
 ): Promise<MagicLinkResult> {
-  const email = String(formData.get("email") ?? "")
-    .trim()
-    .toLowerCase();
-
-  if (!email) {
-    return { ok: false, error: "Enter your email address." };
+  const parsed = magicLinkRequestSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0].message };
   }
+  const { email } = parsed.data;
 
   const ownerEmail = process.env.OWNER_EMAIL?.trim().toLowerCase();
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";

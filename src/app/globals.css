@@ -254,6 +254,10 @@
     @apply bg-background text-foreground;
     font-size: 16px;
     line-height: 1.5;
+    /* Every number in the app — table cells, stats, form inputs — gets
+       fixed-width digits so it doesn't jiggle as values change. Set
+       once here instead of hunting down every render site. */
+    font-variant-numeric: tabular-nums;
   }
 
   button:not(:disabled),

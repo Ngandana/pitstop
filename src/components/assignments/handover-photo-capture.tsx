@@ -90,7 +90,7 @@ function PhotoTile({
         disabled={busy}
         aria-label={file ? `Retake ${ANGLE_LABELS[angle]} photo` : `Capture ${ANGLE_LABELS[angle]} photo`}
         className={cn(
-          "relative flex aspect-square w-full flex-col items-center justify-center gap-1.5 overflow-hidden rounded-lg border-2 border-dashed transition-colors duration-150",
+          "relative flex aspect-square w-full cursor-pointer flex-col items-center justify-center gap-1.5 overflow-hidden rounded-lg border-2 border-dashed transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-50",
           file ? "border-success/40 bg-success-surface" : "border-border bg-surface-sunken hover:border-accent/40",
         )}
       >

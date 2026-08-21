@@ -49,7 +49,7 @@ export function Sidebar({ userEmail }: { userEmail: string | null }) {
           <form action="/auth/signout" method="post">
             <button
               type="submit"
-              className="mt-0.5 -mx-1 flex items-center gap-1.5 rounded px-1 py-1.5 text-xs font-medium text-text-secondary transition-colors duration-150 hover:text-danger"
+              className="mt-0.5 -mx-1 flex cursor-pointer items-center gap-1.5 rounded px-1 py-1.5 text-xs font-medium text-text-secondary transition-colors duration-150 hover:text-danger"
             >
               <LogOut className="size-3.5" aria-hidden="true" />
               Sign out

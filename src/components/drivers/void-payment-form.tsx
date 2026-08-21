@@ -42,7 +42,7 @@ export function VoidPaymentForm({
       <DialogTrigger asChild>
         <button
           type="button"
-          className="text-xs font-medium text-text-muted underline-offset-2 transition-colors duration-150 hover:text-danger hover:underline"
+          className="cursor-pointer text-xs font-medium text-text-muted underline-offset-2 transition-colors duration-150 hover:text-danger hover:underline"
         >
           Void
         </button>

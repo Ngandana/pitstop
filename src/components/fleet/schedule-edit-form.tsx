@@ -47,7 +47,7 @@ export function ScheduleEditForm({
         <button
           type="button"
           aria-label={`Edit ${label} interval`}
-          className="text-text-muted transition-colors duration-150 hover:text-foreground"
+          className="cursor-pointer text-text-muted transition-colors duration-150 hover:text-foreground"
         >
           <Pencil className="size-3.5" aria-hidden="true" />
         </button>

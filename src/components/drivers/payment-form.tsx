@@ -173,7 +173,7 @@ export function PaymentForm({
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={pending || compressing}
-              className="flex h-11 items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border text-sm text-text-secondary transition-colors duration-150 hover:border-accent/40"
+              className="flex h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border text-sm text-text-secondary transition-colors duration-150 hover:border-accent/40 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {compressing ? (
                 <>
