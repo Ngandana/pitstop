@@ -1,5 +1,5 @@
 import "server-only";
-import { desc, eq, isNull } from "drizzle-orm";
+import { desc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { bikes, odometerReadings, reminders, telematicsSyncLog, users } from "@/db/schema";
 import { validateOdometerReading } from "./validate-odometer";
@@ -153,5 +153,8 @@ async function maybeAlertOnConsecutiveFailures(bike: {
       payload: { bikeId: bike.id, registration: bike.registration },
       dedupeKey: `cartrack-sync-failed-${bike.id}-${streakStart}`,
     })
-    .onConflictDoNothing({ target: reminders.dedupeKey });
+    // reminders_dedupe is a *partial* unique index (WHERE dedupe_key IS NOT
+    // NULL) — onConflictDoNothing needs the matching predicate here or
+    // Postgres can't find an arbiter index and the insert throws (42P10).
+    .onConflictDoNothing({ target: reminders.dedupeKey, where: sql`${reminders.dedupeKey} IS NOT NULL` });
 }
