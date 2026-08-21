@@ -36,6 +36,13 @@ export async function generateReminders(): Promise<GenerationSummary> {
   const owner = await db.query.users.findFirst({ where: eq(users.orgId, org.id) });
   if (!owner) return { written: 0, byTemplate: {} };
 
+  // Settings' notification preferences (§7): an explicit notification
+  // email overrides the login email, and the pause toggle drops the
+  // email channel entirely (in-app still gets written either way — that
+  // toggle is scoped to email specifically, per its own label).
+  const recipient = org.notificationEmail ?? owner.email;
+  const channels = org.emailRemindersEnabled ? (["email", "in_app"] as const) : (["in_app"] as const);
+
   const now = new Date();
   const today = formatInTimeZone(now, FLEET_TIMEZONE, "yyyy-MM-dd");
   const byTemplate: Record<string, number> = {};
@@ -61,7 +68,8 @@ export async function generateReminders(): Promise<GenerationSummary> {
       await insertReminder({
         orgId: org.id,
         template: "weekly_rent_summary",
-        recipient: owner.email,
+        recipient,
+        channels,
         payload: { drivers: owing },
         baseDedupeKey: `weekly_rent_summary:${org.id}:${today}`,
       }),
@@ -86,7 +94,8 @@ export async function generateReminders(): Promise<GenerationSummary> {
         await insertReminder({
           orgId: org.id,
           template: "service_warning",
-          recipient: owner.email,
+          recipient,
+          channels,
           payload,
           baseDedupeKey: `service_warning:${s.scheduleId}:${s.lastServiceAt}`,
         }),
@@ -100,7 +109,8 @@ export async function generateReminders(): Promise<GenerationSummary> {
           await insertReminder({
             orgId: org.id,
             template: "service_due",
-            recipient: owner.email,
+            recipient,
+            channels,
             payload,
             baseDedupeKey: `service_due:${s.scheduleId}:${today}`,
           }),
@@ -113,7 +123,8 @@ export async function generateReminders(): Promise<GenerationSummary> {
         await insertReminder({
           orgId: org.id,
           template: "service_overdue",
-          recipient: owner.email,
+          recipient,
+          channels,
           payload,
           baseDedupeKey: `service_overdue:${s.scheduleId}:${today}`,
         }),
@@ -136,7 +147,8 @@ export async function generateReminders(): Promise<GenerationSummary> {
       await insertReminder({
         orgId: org.id,
         template: "licence_expiring",
-        recipient: owner.email,
+        recipient,
+        channels,
         payload: { driverId: driver.id, driverName: driver.fullName, daysUntil: days, expiresOn: driver.licenceExpiresOn },
         baseDedupeKey: `licence_expiring:${driver.id}:${days}`,
       }),
@@ -154,7 +166,8 @@ export async function generateReminders(): Promise<GenerationSummary> {
       await insertReminder({
         orgId: org.id,
         template: "bike_not_moved",
-        recipient: owner.email,
+        recipient,
+        channels,
         payload: { bikeId: bike.bikeId, registration: bike.registration, lastReadingAt: bike.lastReadingAt.toISOString() },
         baseDedupeKey: `bike_not_moved:${bike.bikeId}:${today}`,
       }),
@@ -177,11 +190,13 @@ async function mostRecentReminderCreatedAt(prefix: string): Promise<Date | null>
 }
 
 /**
- * Writes one row per channel the brief's cadence table lists for a
- * trigger — every template here gets both, per §5 ("Email + in-app").
- * dedupe_key is suffixed per-channel so the two rows don't collide on
- * the outbox's shared unique index; in-app rows are considered
- * delivered the moment they're written (see module doc comment).
+ * Writes one row per requested channel — every call site passes the
+ * org's current channel list (both "email" and "in_app" per §5's
+ * cadence table, unless Settings' "pause email reminders" is on, in
+ * which case just "in_app"). dedupe_key is suffixed per-channel so the
+ * two rows don't collide on the outbox's shared unique index; in-app
+ * rows are considered delivered the moment they're written (see module
+ * doc comment).
  */
 async function insertReminder(params: {
   orgId: string;
@@ -189,7 +204,7 @@ async function insertReminder(params: {
   recipient: string;
   payload: unknown;
   baseDedupeKey: string;
-  channels?: ("email" | "in_app")[];
+  channels?: readonly ("email" | "in_app")[];
 }): Promise<number> {
   const channels = params.channels ?? (["email", "in_app"] as const);
   let written = 0;

@@ -32,6 +32,8 @@ export default async function NewAssignmentPage({
           drivers={availableDrivers}
           defaultBikeId={typeof bikeId === "string" ? bikeId : undefined}
           defaultDriverId={typeof driverId === "string" ? driverId : undefined}
+          defaultWeeklyRentRands={org.defaultWeeklyRentCents !== null ? org.defaultWeeklyRentCents / 100 : null}
+          defaultDepositRands={org.defaultDepositCents !== null ? org.defaultDepositCents / 100 : null}
         />
       </div>
     </div>

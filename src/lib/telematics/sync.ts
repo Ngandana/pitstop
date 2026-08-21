@@ -1,7 +1,7 @@
 import "server-only";
 import { desc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { bikes, odometerReadings, reminders, telematicsSyncLog, users } from "@/db/schema";
+import { bikes, odometerReadings, organisations, reminders, telematicsSyncLog, users } from "@/db/schema";
 import { validateOdometerReading } from "./validate-odometer";
 import type { TelematicsProvider } from "./types";
 
@@ -139,6 +139,12 @@ async function maybeAlertOnConsecutiveFailures(bike: {
 
   if (recent.length < 2 || recent.some((r) => r.succeeded)) return;
 
+  const org = await db.query.organisations.findFirst({ where: eq(organisations.id, bike.orgId) });
+  // This trigger is email-only (§5's cadence table — no in-app row to
+  // fall back to), so "pause email reminders" means don't write it at
+  // all, unlike the other triggers in src/lib/reminders/generate.ts.
+  if (!org || !org.emailRemindersEnabled) return;
+
   const owner = await db.query.users.findFirst({ where: eq(users.orgId, bike.orgId) });
   if (!owner) return;
 
@@ -149,7 +155,7 @@ async function maybeAlertOnConsecutiveFailures(bike: {
       orgId: bike.orgId,
       template: "cartrack_sync_failed",
       channel: "email",
-      recipient: owner.email,
+      recipient: org.notificationEmail ?? owner.email,
       payload: { bikeId: bike.id, registration: bike.registration },
       dedupeKey: `cartrack-sync-failed-${bike.id}-${streakStart}`,
     })

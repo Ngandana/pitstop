@@ -26,11 +26,16 @@ export function AssignmentForm({
   drivers,
   defaultBikeId,
   defaultDriverId,
+  defaultWeeklyRentRands,
+  defaultDepositRands,
 }: {
   bikes: { id: string; registration: string; make: string; model: string }[];
   drivers: { id: string; fullName: string }[];
   defaultBikeId?: string;
   defaultDriverId?: string;
+  /** From Settings' rent policy defaults (§7) — pre-fills only, never required. */
+  defaultWeeklyRentRands?: number | null;
+  defaultDepositRands?: number | null;
 }) {
   const [pending, startTransition] = useTransition();
   const [result, setResult] = useState<FormResult | null>(null);
@@ -133,6 +138,7 @@ export function AssignmentForm({
             step="0.01"
             required
             disabled={pending}
+            defaultValue={defaultWeeklyRentRands ?? undefined}
             placeholder="850"
           />
         </div>
@@ -144,7 +150,7 @@ export function AssignmentForm({
             type="number"
             inputMode="decimal"
             step="0.01"
-            defaultValue={0}
+            defaultValue={defaultDepositRands ?? 0}
             disabled={pending}
           />
         </div>
