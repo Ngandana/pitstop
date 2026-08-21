@@ -37,14 +37,22 @@ export type ActionItem =
       bikeId: string;
       registration: string;
       lastReadingAt: Date;
+      driverId: string;
+      driverName: string;
+      phoneE164: string;
     }
   | {
       kind: "service";
+      scheduleId: string;
       bikeId: string;
       registration: string;
       serviceLabel: string;
       status: Extract<ServiceStatus, "warning" | "due" | "overdue">;
       kmRemaining: number | null;
+      /** Only set when a driver is currently riding this bike. */
+      driverId: string | null;
+      driverName: string | null;
+      phoneE164: string | null;
     }
   | {
       kind: "arrears";
@@ -60,6 +68,44 @@ export type TodayData = {
   bikes: TodayBike[];
   actionItems: ActionItem[];
 };
+
+export type StalledBike = { bikeId: string; registration: string; lastReadingAt: Date };
+
+/**
+ * Bikes with an open assignment whose odometer hasn't moved in 48h+
+ * (§5's "bike hasn't moved" trigger) — the same detection getTodayData
+ * uses inline for its bike_not_moving action item, factored out here so
+ * the reminder generator (Milestone 6) can reuse it instead of
+ * re-deriving the rule.
+ */
+export async function getStalledBikes(orgId: string, now: Date): Promise<StalledBike[]> {
+  const bikeRows = await db.query.bikes.findMany({
+    where: and(eq(bikes.orgId, orgId), isNull(bikes.deletedAt)),
+  });
+
+  const result: StalledBike[] = [];
+  for (const bike of bikeRows) {
+    const [openAssignment] = await db
+      .select({ id: assignments.id })
+      .from(assignments)
+      .where(and(eq(assignments.bikeId, bike.id), isNull(assignments.endedAt)))
+      .limit(1);
+    if (!openAssignment) continue;
+
+    const readings = await db
+      .select({ km: odometerReadings.readingKm, at: odometerReadings.recordedAt })
+      .from(odometerReadings)
+      .where(eq(odometerReadings.bikeId, bike.id))
+      .orderBy(desc(odometerReadings.recordedAt))
+      .limit(10);
+    if (readings.length === 0) continue;
+
+    if (hasBikeStalled(readings, now)) {
+      result.push({ bikeId: bike.id, registration: bike.registration, lastReadingAt: readings[0].at });
+    }
+  }
+  return result;
+}
 
 /** Everything the Today screen needs, in one call. */
 export async function getTodayData(): Promise<TodayData> {
@@ -77,15 +123,17 @@ export async function getTodayData(): Promise<TodayData> {
   const actionItems: ActionItem[] = [];
 
   const nextServiceByBike = await getMostUrgentServiceStatusPerBike(org.id);
+  const assignedDriverByBike = new Map<string, { driverId: string; driverName: string; phoneE164: string }>();
 
   const bikeDetails = await Promise.all(
     bikeRows.map(async (bike) => {
       const [openAssignment] = await db
-        .select({ driverName: drivers.fullName })
+        .select({ driverId: drivers.id, driverName: drivers.fullName, phoneE164: drivers.phoneE164 })
         .from(assignments)
         .innerJoin(drivers, eq(drivers.id, assignments.driverId))
         .where(and(eq(assignments.bikeId, bike.id), isNull(assignments.endedAt)))
         .limit(1);
+      if (openAssignment) assignedDriverByBike.set(bike.id, openAssignment);
 
       const readings = await db
         .select({ km: odometerReadings.readingKm, at: odometerReadings.recordedAt })
@@ -102,6 +150,9 @@ export async function getTodayData(): Promise<TodayData> {
           bikeId: bike.id,
           registration: bike.registration,
           lastReadingAt: latest!.at,
+          driverId: openAssignment.driverId,
+          driverName: openAssignment.driverName,
+          phoneE164: openAssignment.phoneE164,
         });
       }
 
@@ -161,12 +212,17 @@ export async function getTodayData(): Promise<TodayData> {
   const dueServices = await getDueServicesForOrg(org.id);
   for (const s of dueServices) {
     if (s.status === "ok") continue;
+    const assignedDriver = assignedDriverByBike.get(s.bikeId) ?? null;
     actionItems.push({
       kind: "service",
+      scheduleId: s.scheduleId,
       bikeId: s.bikeId,
       registration: s.registration,
       serviceLabel: s.label,
       status: s.status,
+      driverId: assignedDriver?.driverId ?? null,
+      driverName: assignedDriver?.driverName ?? null,
+      phoneE164: assignedDriver?.phoneE164 ?? null,
       kmRemaining: s.kmRemaining,
     });
   }

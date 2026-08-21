@@ -37,7 +37,7 @@ export default async function TodayPage() {
                 item.kind === "licence_expiring"
                   ? `licence-${item.driverId}`
                   : item.kind === "service"
-                    ? `service-${item.bikeId}-${item.serviceLabel}`
+                    ? `service-${item.scheduleId}`
                     : item.kind === "arrears"
                       ? `arrears-${item.driverId}`
                       : `stalled-${item.bikeId}`;

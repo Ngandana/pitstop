@@ -1,12 +1,8 @@
 {
   "crons": [
-    {
-      "path": "/api/cron/mileage-sync",
-      "schedule": "0 0 * * *"
-    },
-    {
-      "path": "/api/cron/rent-charges",
-      "schedule": "0 4 * * *"
-    }
+    { "path": "/api/cron/mileage-sync", "schedule": "0 0 * * *" },
+    { "path": "/api/cron/rent-charges", "schedule": "0 4 * * *" },
+    { "path": "/api/cron/reminders-generate", "schedule": "30 5 * * *" },
+    { "path": "/api/cron/reminders-sweep", "schedule": "0 6 * * *" }
   ]
 }

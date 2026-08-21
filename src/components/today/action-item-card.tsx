@@ -1,7 +1,9 @@
-import { AlertTriangle, CircleDollarSign, IdCard, Wrench } from "lucide-react";
+import { AlertTriangle, CircleDollarSign, IdCard, MessageCircle, Wrench } from "lucide-react";
 import Link from "next/link";
 import type { ActionItem } from "@/lib/queries/today";
 import { formatCents, formatDate, formatKm } from "@/lib/format";
+import { buildWhatsAppLink } from "@/lib/whatsapp";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const URGENT_THRESHOLD_DAYS = 7;
@@ -12,6 +14,23 @@ const SEVERITY_CLASSES = {
   due: "border-due/30 bg-due-surface text-due",
   danger: "border-danger/30 bg-danger-surface text-danger",
 } as const;
+
+/**
+ * §5: "Driver notification is manual by design" — every card whose
+ * trigger concerns a driver (not the cartrack_sync_failed / owner-only
+ * kind of alert) gets one of these, opening wa.me with a pre-written
+ * message. No messaging API integration.
+ */
+function SendToDriverButton({ phoneE164, message }: { phoneE164: string; message: string }) {
+  return (
+    <Button asChild variant="outline" size="sm" className="mt-2">
+      <a href={buildWhatsAppLink(phoneE164, message)} target="_blank" rel="noopener noreferrer">
+        <MessageCircle aria-hidden="true" />
+        Send to driver
+      </a>
+    </Button>
+  );
+}
 
 export function ActionItemCard({ item }: { item: ActionItem }) {
   if (item.kind === "licence_expiring") {
@@ -34,6 +53,10 @@ export function ActionItemCard({ item }: { item: ActionItem }) {
           <p className="mt-0.5 text-xs text-text-secondary">
             Expires {formatDate(item.expiresOn)} &middot; {item.phoneE164}
           </p>
+          <SendToDriverButton
+            phoneE164={item.phoneE164}
+            message={`Hi ${item.driverName}, your driver's licence ${dayLabel}. Please renew it and send through a copy when you can. - Pitstop`}
+          />
         </div>
       </li>
     );
@@ -58,6 +81,12 @@ export function ActionItemCard({ item }: { item: ActionItem }) {
             {item.registration}: {item.serviceLabel} {statusLabel}
           </Link>
           <p className="mt-0.5 text-xs text-text-secondary">Service{kmLabel}</p>
+          {item.phoneE164 && item.driverName && (
+            <SendToDriverButton
+              phoneE164={item.phoneE164}
+              message={`Hi ${item.driverName}, ${item.registration} is ${statusLabel} for a service (${item.serviceLabel}). Please bring it in when you can. - Pitstop`}
+            />
+          )}
         </div>
       </li>
     );
@@ -78,6 +107,10 @@ export function ActionItemCard({ item }: { item: ActionItem }) {
           <p className="mt-0.5 text-xs text-text-secondary">
             Owes {formatCents(item.balanceCents)} &middot; {item.phoneE164}
           </p>
+          <SendToDriverButton
+            phoneE164={item.phoneE164}
+            message={`Hi ${item.driverName}, your rent account is ${item.daysInArrears} day${item.daysInArrears === 1 ? "" : "s"} behind - you owe ${formatCents(item.balanceCents)}. Please settle when you can. - Pitstop`}
+          />
         </div>
       </li>
     );
@@ -93,6 +126,10 @@ export function ActionItemCard({ item }: { item: ActionItem }) {
         <p className="mt-0.5 text-xs text-text-secondary">
           Last reading {formatDate(item.lastReadingAt, "d MMM, HH:mm")}
         </p>
+        <SendToDriverButton
+          phoneE164={item.phoneE164}
+          message={`Hi ${item.driverName}, ${item.registration} hasn't shown any movement since ${formatDate(item.lastReadingAt, "d MMM, HH:mm")}. Please check in when you get a chance. - Pitstop`}
+        />
       </div>
     </li>
   );
