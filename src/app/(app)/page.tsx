@@ -38,7 +38,9 @@ export default async function TodayPage() {
                   ? `licence-${item.driverId}`
                   : item.kind === "service"
                     ? `service-${item.bikeId}-${item.serviceLabel}`
-                    : `stalled-${item.bikeId}`;
+                    : item.kind === "arrears"
+                      ? `arrears-${item.driverId}`
+                      : `stalled-${item.bikeId}`;
               return <ActionItemCard key={key} item={item} />;
             })}
           </ul>

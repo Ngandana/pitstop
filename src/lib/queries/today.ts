@@ -4,6 +4,7 @@ import { assignments, bikes, drivers, odometerReadings } from "@/db/schema";
 import type { bikeStatusEnum } from "@/db/schema";
 import { daysUntil, hasBikeStalled } from "@/lib/action-items";
 import { getDueServicesForOrg, getMostUrgentServiceStatusPerBike } from "@/lib/queries/servicing";
+import { getDriverBalances } from "@/lib/queries/money";
 import type { ServiceStatus } from "@/lib/servicing/due-calc";
 
 export type TodayBike = {
@@ -44,6 +45,14 @@ export type ActionItem =
       serviceLabel: string;
       status: Extract<ServiceStatus, "warning" | "due" | "overdue">;
       kmRemaining: number | null;
+    }
+  | {
+      kind: "arrears";
+      driverId: string;
+      driverName: string;
+      phoneE164: string;
+      balanceCents: number;
+      daysInArrears: number;
     };
 
 export type TodayData = {
@@ -135,6 +144,20 @@ export async function getTodayData(): Promise<TodayData> {
     }
   }
 
+  const balances = await getDriverBalances(org.id);
+  for (const driver of activeDrivers) {
+    const balance = balances.get(driver.id);
+    if (!balance || balance.daysInArrears <= 0) continue;
+    actionItems.push({
+      kind: "arrears",
+      driverId: driver.id,
+      driverName: driver.fullName,
+      phoneE164: driver.phoneE164,
+      balanceCents: balance.balanceCents,
+      daysInArrears: balance.daysInArrears,
+    });
+  }
+
   const dueServices = await getDueServicesForOrg(org.id);
   for (const s of dueServices) {
     if (s.status === "ok") continue;
@@ -149,18 +172,21 @@ export async function getTodayData(): Promise<TodayData> {
   }
 
   // Urgency order: a stranded/overdue bike outranks everything else, then
-  // due services, then a bike that's gone quiet, then licences (soonest
-  // first), then services that are merely trending toward due.
+  // due services, then arrears (worse the longer it's gone on), then a
+  // bike that's gone quiet, then licences (soonest first), then services
+  // that are merely trending toward due.
   const KIND_RANK: Record<string, number> = {
     "service:overdue": 0,
     "service:due": 1,
-    bike_not_moving: 2,
-    licence_expiring: 3,
-    "service:warning": 4,
+    arrears: 2,
+    bike_not_moving: 3,
+    licence_expiring: 4,
+    "service:warning": 5,
   };
   const rank = (item: ActionItem) => {
     if (item.kind === "service") return KIND_RANK[`service:${item.status}`];
     if (item.kind === "licence_expiring") return KIND_RANK.licence_expiring + item.daysUntil / 1000;
+    if (item.kind === "arrears") return KIND_RANK.arrears - item.daysInArrears / 1000;
     return KIND_RANK[item.kind];
   };
   actionItems.sort((a, b) => rank(a) - rank(b));

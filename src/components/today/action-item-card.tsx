@@ -1,7 +1,7 @@
-import { AlertTriangle, IdCard, Wrench } from "lucide-react";
+import { AlertTriangle, CircleDollarSign, IdCard, Wrench } from "lucide-react";
 import Link from "next/link";
 import type { ActionItem } from "@/lib/queries/today";
-import { formatDate, formatKm } from "@/lib/format";
+import { formatCents, formatDate, formatKm } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 const URGENT_THRESHOLD_DAYS = 7;
@@ -58,6 +58,26 @@ export function ActionItemCard({ item }: { item: ActionItem }) {
             {item.registration}: {item.serviceLabel} {statusLabel}
           </Link>
           <p className="mt-0.5 text-xs text-text-secondary">Service{kmLabel}</p>
+        </div>
+      </li>
+    );
+  }
+
+  if (item.kind === "arrears") {
+    const severity = item.daysInArrears >= 14 ? "danger" : "warning";
+    return (
+      <li className={cn("flex items-start gap-3 rounded-lg border p-4", SEVERITY_CLASSES[severity])}>
+        <CircleDollarSign className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
+        <div className="min-w-0 flex-1">
+          <Link
+            href={`/drivers/${item.driverId}`}
+            className="text-sm font-medium text-foreground hover:underline"
+          >
+            {item.driverName} is {item.daysInArrears} day{item.daysInArrears === 1 ? "" : "s"} behind
+          </Link>
+          <p className="mt-0.5 text-xs text-text-secondary">
+            Owes {formatCents(item.balanceCents)} &middot; {item.phoneE164}
+          </p>
         </div>
       </li>
     );

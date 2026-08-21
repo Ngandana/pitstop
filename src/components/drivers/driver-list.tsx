@@ -4,8 +4,9 @@ import { Users, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { DriverListRow } from "@/lib/queries/drivers";
-import { formatDate } from "@/lib/format";
+import { formatCents, formatDate } from "@/lib/format";
 import { daysUntil } from "@/lib/action-items";
+import { cn } from "@/lib/utils";
 
 function LicenceExpiry({ date }: { date: string | null }) {
   if (!date) return <span className="text-text-muted">—</span>;
@@ -18,6 +19,20 @@ function LicenceExpiry({ date }: { date: string | null }) {
       {soon ? <TriangleAlert className="size-3.5" aria-hidden="true" /> : null}
       {formatDate(date)}
     </span>
+  );
+}
+
+function Balance({ balanceCents, daysInArrears }: { balanceCents: number; daysInArrears: number }) {
+  const owing = balanceCents > 0;
+  return (
+    <div>
+      <p className={cn("font-medium tabular-nums", owing ? "text-danger" : "text-text-secondary")}>
+        {formatCents(balanceCents)}
+      </p>
+      {daysInArrears > 0 ? (
+        <p className="text-xs text-danger">{daysInArrears} day{daysInArrears === 1 ? "" : "s"} behind</p>
+      ) : null}
+    </div>
   );
 }
 
@@ -56,13 +71,16 @@ export function DriverList({ drivers }: { drivers: DriverListRow[] }) {
                 <span className="text-text-secondary">{d.bikeRegistration ?? "No bike"}</span>
                 <LicenceExpiry date={d.licenceExpiresOn} />
               </div>
+              <div className="mt-2 border-t border-border pt-2">
+                <Balance balanceCents={d.balanceCents} daysInArrears={d.daysInArrears} />
+              </div>
             </Link>
           </li>
         ))}
       </ul>
 
       <div className="hidden overflow-x-auto rounded-xl border border-border bg-surface-raised md:block">
-        <table className="w-full min-w-[560px] text-left text-sm">
+        <table className="w-full min-w-[640px] text-left text-sm">
           <thead>
             <tr className="border-b border-border text-xs text-text-secondary">
               <th scope="col" className="px-4 py-3 font-medium whitespace-nowrap">
@@ -73,6 +91,9 @@ export function DriverList({ drivers }: { drivers: DriverListRow[] }) {
               </th>
               <th scope="col" className="px-4 py-3 font-medium whitespace-nowrap">
                 Current bike
+              </th>
+              <th scope="col" className="px-4 py-3 text-right font-medium whitespace-nowrap">
+                Balance
               </th>
               <th scope="col" className="px-4 py-3 font-medium whitespace-nowrap">
                 Licence expiry
@@ -97,6 +118,9 @@ export function DriverList({ drivers }: { drivers: DriverListRow[] }) {
                 <td className="px-4 py-3 whitespace-nowrap text-text-secondary">{d.phoneE164}</td>
                 <td className="px-4 py-3 whitespace-nowrap text-text-secondary">
                   {d.bikeRegistration ?? "No bike"}
+                </td>
+                <td className="px-4 py-3 text-right whitespace-nowrap">
+                  <Balance balanceCents={d.balanceCents} daysInArrears={d.daysInArrears} />
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap">
                   <LicenceExpiry date={d.licenceExpiresOn} />

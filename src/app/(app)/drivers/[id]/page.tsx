@@ -2,8 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft, Pencil, IdCard, Phone, Bike as BikeIcon } from "lucide-react";
 import { getDriverDetail } from "@/lib/queries/drivers";
+import { getDriverMoneySummary } from "@/lib/queries/money";
+import { getPaymentProofUrl } from "@/lib/storage";
 import { EndAssignmentForm } from "@/components/assignments/end-assignment-form";
+import { PaymentForm } from "@/components/drivers/payment-form";
+import { DriverMoneySection } from "@/components/drivers/driver-money-section";
 import { formatCents, formatDate, formatKm } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +18,16 @@ export default async function DriverDetailPage({ params }: PageProps<"/drivers/[
   if (!detail) notFound();
 
   const { driver, openAssignment, assignments } = detail;
+  const money = await getDriverMoneySummary(id);
+
+  const paymentsWithProof = await Promise.all(
+    money.payments.map(async (p) => ({
+      ...p,
+      proofUrl: p.proofStorageKey ? await getPaymentProofUrl(p.proofStorageKey) : null,
+    })),
+  );
+
+  const owing = money.balanceCents > 0;
 
   return (
     <div className="flex flex-col gap-6">
@@ -48,6 +63,28 @@ export default async function DriverDetailPage({ params }: PageProps<"/drivers/[
             {driver.licenceExpiresOn ? ` · expires ${formatDate(driver.licenceExpiresOn)}` : ""}
           </span>
         ) : null}
+      </div>
+
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-sm text-text-secondary">Balance</p>
+          <p className={cn("text-stat", owing ? "text-danger" : "text-foreground")}>
+            {formatCents(money.balanceCents)}
+          </p>
+          {money.daysInArrears > 0 ? (
+            <p className="text-sm text-danger">
+              {money.daysInArrears} day{money.daysInArrears === 1 ? "" : "s"} behind
+            </p>
+          ) : null}
+        </div>
+        <PaymentForm
+          driverId={driver.id}
+          assignments={assignments.map((a) => ({
+            id: a.id,
+            bikeRegistration: a.bikeRegistration,
+            isOpen: a.endedAt === null,
+          }))}
+        />
       </div>
 
       <section className="rounded-xl border border-border bg-surface-raised p-5">
@@ -86,6 +123,8 @@ export default async function DriverDetailPage({ params }: PageProps<"/drivers/[
           </div>
         )}
       </section>
+
+      <DriverMoneySection driverId={driver.id} charges={money.charges} paymentsList={paymentsWithProof} />
 
       <section className="rounded-xl border border-border bg-surface-raised p-5">
         <h2 className="mb-3 text-sm font-semibold text-foreground">Assignment history</h2>
