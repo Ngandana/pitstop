@@ -1,0 +1,1 @@
+ALTER TABLE "bikes" ADD COLUMN "odometer_offset_km" integer DEFAULT 0 NOT NULL;

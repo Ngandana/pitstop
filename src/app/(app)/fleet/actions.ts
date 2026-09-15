@@ -5,11 +5,17 @@ import { redirect } from "next/navigation";
 import { desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { bikes, bikeStatusHistory, odometerReadings } from "@/db/schema";
-import { bikeFormSchema, bikeStatusChangeSchema, manualOdometerSchema } from "@/lib/validation/bikes";
+import {
+  bikeFormSchema,
+  bikeStatusChangeSchema,
+  manualOdometerSchema,
+  trackerReplacementSchema,
+} from "@/lib/validation/bikes";
 import { getCurrentOrg } from "@/lib/queries/org";
 import { createDefaultServiceSchedules } from "@/lib/servicing/schedules";
 import { changeBikeStatus } from "@/lib/bikes/status";
 import { validateOdometerReading } from "@/lib/telematics/validate-odometer";
+import { createCartrackProviderFromEnv } from "@/lib/telematics/cartrack";
 
 export type FormResult = { ok: true } | { ok: false; error: string; fieldErrors?: Record<string, string> };
 
@@ -183,6 +189,82 @@ export async function updateBikeStatus(
     });
   } catch {
     return { ok: false, error: "Couldn't update status. Try again." };
+  }
+
+  revalidatePath(`/fleet/${bikeId}`);
+  revalidatePath("/fleet");
+  revalidatePath("/");
+  return { ok: true };
+}
+
+/**
+ * Re-baselines a bike after its tracker was replaced.
+ *
+ * A new tracker starts its odometer at zero, so Cartrack begins reporting a
+ * number far below the bike's real mileage. Left alone the nightly sync
+ * rejects every reading as a backwards jump, forever, and the bike's history
+ * would have to be thrown away to unstick it.
+ *
+ * Instead the owner enters what the bike's dashboard actually reads, and the
+ * difference against the tracker's current value is stored as the bike's
+ * odometer offset. From then on the sync adds it back, so stored readings
+ * stay on the bike's real lifetime scale and service intervals keep working.
+ */
+export async function recordTrackerReplacement(
+  bikeId: string,
+  _prev: FormResult | null,
+  formData: FormData,
+): Promise<FormResult> {
+  const parsed = trackerReplacementSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid reading." };
+  }
+  const { trueKm } = parsed.data;
+
+  const org = await getCurrentOrg();
+  const bike = await db.query.bikes.findFirst({
+    where: (b, { and, eq, isNull }) =>
+      and(eq(b.id, bikeId), eq(b.orgId, org.id), isNull(b.deletedAt)),
+  });
+  if (!bike) return { ok: false, error: "Bike not found." };
+  if (!bike.cartrackVehicleId) {
+    return { ok: false, error: "This bike isn't linked to Cartrack, so there's no tracker to re-baseline." };
+  }
+
+  // Ask the tracker what it currently reads, so the offset is computed
+  // against the live device rather than a stale stored reading.
+  let provider;
+  try {
+    provider = createCartrackProviderFromEnv();
+  } catch {
+    return { ok: false, error: "Cartrack isn't configured, so the offset can't be worked out." };
+  }
+  const result = await provider.fetchOdometerReading(bike.cartrackVehicleId);
+  if (!result.ok) {
+    return { ok: false, error: `Couldn't reach Cartrack to read the new tracker: ${result.error}` };
+  }
+
+  // result.km is the raw tracker value; trueKm is the bike's real total.
+  const offsetKm = trueKm - result.km;
+
+  try {
+    await db.transaction(async (tx) => {
+      await tx
+        .update(bikes)
+        .set({ odometerOffsetKm: offsetKm, updatedAt: new Date() })
+        .where(eq(bikes.id, bikeId));
+      // Override, because this reading is deliberately discontinuous with
+      // the previous tracker's last value — that's the whole point of it.
+      await tx.insert(odometerReadings).values({
+        orgId: org.id,
+        bikeId,
+        readingKm: trueKm,
+        source: "manual",
+        overrideFlag: true,
+      });
+    });
+  } catch {
+    return { ok: false, error: "Couldn't save the re-baseline. Try again." };
   }
 
   revalidatePath(`/fleet/${bikeId}`);

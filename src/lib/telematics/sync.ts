@@ -19,7 +19,13 @@ export type SyncOutcome = {
  * accept or silently drop a bad reading).
  */
 export async function syncBikeOdometer(params: {
-  bike: { id: string; orgId: string; registration: string; cartrackVehicleId: string | null };
+  bike: {
+    id: string;
+    orgId: string;
+    registration: string;
+    cartrackVehicleId: string | null;
+    odometerOffsetKm: number;
+  };
   provider: TelematicsProvider;
 }): Promise<SyncOutcome> {
   const { bike, provider } = params;
@@ -59,9 +65,15 @@ export async function syncBikeOdometer(params: {
     ? (result.recordedAt.getTime() - latest.recordedAt.getTime()) / 86_400_000
     : null;
 
+  // The provider reports what its tracker has counted; the bike's real
+  // lifetime total is that plus the offset carried over from any previous
+  // tracker. Everything downstream — validation, storage, service due-calc —
+  // works in the bike's scale, never the tracker's.
+  const readingKm = result.km + bike.odometerOffsetKm;
+
   const validation = validateOdometerReading({
     previousKm,
-    newKm: result.km,
+    newKm: readingKm,
     override: false,
     daysElapsed,
   });
@@ -90,7 +102,7 @@ export async function syncBikeOdometer(params: {
   await db.insert(odometerReadings).values({
     orgId: bike.orgId,
     bikeId: bike.id,
-    readingKm: result.km,
+    readingKm,
     source: "cartrack",
     recordedAt: result.recordedAt,
     rawPayload: result.raw,
@@ -107,7 +119,7 @@ export async function syncBikeOdometer(params: {
     bikeId: bike.id,
     registration: bike.registration,
     status: "synced",
-    detail: `${result.km} km`,
+    detail: `${readingKm} km`,
   };
 }
 

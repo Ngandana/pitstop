@@ -74,6 +74,15 @@ export const manualOdometerSchema = z.object({
   readingKm: z.coerce.number().int().nonnegative().max(500_000),
 });
 
+/**
+ * Re-baselining after a tracker swap. `trueKm` is what the bike's own
+ * dashboard odometer reads — the ground truth the new tracker has to be
+ * reconciled against, since it starts counting from zero.
+ */
+export const trackerReplacementSchema = z.object({
+  trueKm: z.coerce.number().int().nonnegative().max(500_000),
+});
+
 export const bikeStatusChangeSchema = z.object({
   status: z.enum(bikeStatusEnum.enumValues),
   reason: z

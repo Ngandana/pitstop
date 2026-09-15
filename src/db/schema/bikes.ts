@@ -30,6 +30,17 @@ export const bikes = pgTable(
     purchasePriceCents: bigint("purchase_price_cents", { mode: "number" }),
     /** Cartrack's vehicle id for the nightly telematics sync. Null until linked. */
     cartrackVehicleId: text("cartrack_vehicle_id"),
+    /**
+     * Added to every provider-reported odometer value to get the bike's real
+     * lifetime kilometres: `appKm = providerKm + odometerOffsetKm`.
+     *
+     * A replaced tracker starts counting from zero, so without this the bike
+     * appears to lose its entire history overnight and the sync jams on the
+     * backwards reading. This is stored configuration, not a derived value —
+     * it's a fact about the hardware fitted to the bike, and it only changes
+     * when a tracker is swapped (see re-baselining in src/lib/telematics).
+     */
+    odometerOffsetKm: integer("odometer_offset_km").notNull().default(0),
     status: bikeStatusEnum("status").notNull().default("unassigned"),
     /** Soft delete — bikes keep their full history even once sold/written off. */
     deletedAt: timestamp("deleted_at", { withTimezone: true }),

@@ -5,6 +5,7 @@ import { getBikeDetail } from "@/lib/queries/fleet";
 import { BikeStatusBadge } from "@/components/bike-status-badge";
 import { StatusChangeForm } from "@/components/fleet/status-change-form";
 import { ManualOdometerForm } from "@/components/fleet/manual-odometer-form";
+import { TrackerReplacementForm } from "@/components/fleet/tracker-replacement-form";
 import { MileageChart } from "@/components/fleet/mileage-chart";
 import { ServiceScheduleList } from "@/components/fleet/service-schedule-list";
 import { LogServiceForm } from "@/components/fleet/log-service-form";
@@ -159,6 +160,22 @@ export default async function BikeDetailPage({ params }: PageProps<"/fleet/[id]"
             <div className="mt-4 border-t border-border pt-4">
               <ManualOdometerForm bikeId={bike.id} />
             </div>
+
+            {/* Rare enough to stay folded away, but it has to be reachable
+                without help the moment a tracker is swapped. */}
+            {bike.cartrackVehicleId ? (
+              <details className="group mt-4 border-t border-border pt-4">
+                <summary className="cursor-pointer list-none text-sm font-medium text-text-secondary transition-colors duration-200 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">
+                  Tracker replaced?
+                </summary>
+                <div className="mt-3">
+                  <TrackerReplacementForm
+                    bikeId={bike.id}
+                    currentOffsetKm={bike.odometerOffsetKm}
+                  />
+                </div>
+              </details>
+            ) : null}
 
             {recentReadings.length > 0 ? (
               <ul className="mt-4 flex max-h-64 flex-col divide-y divide-border overflow-y-auto border-t border-border">
