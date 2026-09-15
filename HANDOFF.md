@@ -280,23 +280,71 @@ Live verification against the **real** Supabase project, not a test DB:
 - `README.md` — local setup, migrations, seeding, Vercel deploy steps
   (kept up to date through this session)
 
+## Cartrack: verified working, plus two bugs found and fixed (2026-09-15)
+
+**Cartrack is connected and returning live data.** The "Admin Credentials"
+guess from the deploy session was correct — that open question is closed.
+Credentials authenticate fine and `/vehicles` returns both real bikes.
+
+Testing it against the live API surfaced two genuine defects, both fixed in
+`a4440c5`:
+
+1. **Wrong field name.** The client read `data.latest_event_ts` (the name in
+   the OpenAPI spec) but the API actually returns **`last_event_ts`**. It
+   silently resolved to `undefined`, so every reading was stamped with the
+   moment the cron ran rather than when the bike last reported. If you ever
+   see a spec field resolve to undefined here, check the live response before
+   trusting the spec.
+2. **The 500 km jump ceiling jammed permanently after any sync gap.** The
+   brief's flat "500 km" assumes the sync ran the night before; it's really a
+   per-day allowance. After the 25-day gap (app not yet deployed), CEY43374
+   had legitimately done 2,383 km, which a flat ceiling rejects — and would
+   keep rejecting every night after, since the stored reading never advances.
+   The ceiling now scales with elapsed time between readings. The nightly
+   case is unchanged at 500 km. This is a deliberate deviation from §5's
+   literal wording; the intent is preserved.
+
+### Tracker replacement / odometer offset (`dbbc9e7`)
+
+JDW844X's tracker was physically replaced. The new device restarted its
+odometer near zero (reads ~185 km) while the app held 9,262 km. A naive
+re-baseline to 185 would have been actively dangerous: all 7 of that bike's
+service schedules carry `last_service_km = 9262`, so due-progress would have
+gone negative and **the bike would silently never show as due for service
+again**.
+
+Fix: `bikes.odometer_offset_km` (migration 0003, additive, default 0 — agreed
+with the owner first, per §10). Sync stores `providerKm + offset`, so readings
+stay on the bike's true lifetime scale. The owner never types an offset —
+"Tracker replaced?" on the bike detail page asks what the bike's dashboard
+reads, queries the tracker, and derives the offset.
+
+**Still outstanding:** JDW844X has NOT been re-baselined yet — it needs the
+bike's actual dashboard reading, which nobody has checked. Until then its
+nightly sync keeps getting rejected (harmlessly, now with a message naming
+the tracker swap and the fix). CEY43374 needs nothing; the threshold fix
+means its sync resumes on its own.
+
+Also worth knowing: **no service has ever been logged in the app.** The
+`last_service_km` values are just the odometer readings from when each bike
+was registered on 2026-08-21. The owner says JDW844X *has* been serviced,
+outside the app — so the schedules are not trustworthy until that history is
+entered.
+
 ## Immediate next step
 
-Deploy is done and verified (see "Verified 2026-09-15"). Nothing is
-blocking. In rough priority order, pick up with:
-
-1. **Add `RESEND_API_KEY`** (see below — biggest actual gap right now).
-2. Trigger one real authenticated cron run per route and confirm it does
-   the right thing against production data — the routes are proven to be
-   *reachable and auth-gated* (401 check above), but no authenticated call
-   has actually been made against prod yet. These write real data, so do
-   this deliberately, one route at a time, and check the result before
-   moving to the next: `curl -H "Authorization: Bearer $CRON_SECRET"
+1. **Re-baseline JDW844X** — read the bike's dashboard odometer, then use
+   "Tracker replaced?" on its fleet page. Nothing else unsticks its sync.
+2. **Enter JDW844X's real service history** (owner confirmed it was serviced
+   outside the app) so the schedules reflect reality rather than the
+   registration-day baseline.
+3. Trigger one authenticated cron run per route against prod and check the
+   result — routes are proven reachable and auth-gated, but no authenticated
+   call has been made against prod yet. These write real data, so do it
+   deliberately, one at a time: `curl -H "Authorization: Bearer $CRON_SECRET"
    https://pitstop-opal.vercel.app/api/cron/<name>`.
-3. Confirm Cartrack sync works against prod specifically — resolves the
-   Admin-Credentials-vs-portal-password open question from "Deploy session".
-4. Watch the Vercel dashboard's cron/function logs for the first few nights
-   once crons start firing on their real schedule (see `vercel.json`).
+4. Watch Vercel's cron/function logs for the first few nights once crons fire
+   on their real schedule (see `vercel.json`).
 
 ## The project is otherwise feature-complete
 
@@ -305,10 +353,13 @@ Test suite: 62 tests across 6 files, all passing as of 2026-09-15. So once
 the deploy is genuinely working, remaining work is the user's call, not the
 brief's. Known loose ends, in rough priority order:
 
-- **`RESEND_API_KEY` is unset** — every reminder email silently no-ops
-  (`sendEmail()` returns `{ ok: false }`). The whole of Milestone 6 is
-  effectively inert in production until a key is added. This is the biggest
-  functional gap.
+- **`RESEND_API_KEY` is set locally as of 2026-09-15** and verified valid
+  against Resend's API. Two caveats: it is **not yet set in Vercel**, so
+  production reminders still no-op until it's added there; and the Resend
+  account has **no verified sending domain**, so mail goes out as
+  `onboarding@resend.dev`, which only delivers to the account's own address.
+  Fine while reminders go to the owner; a verified domain is needed before
+  anything is sent to anyone else.
 - **Cron routes have never been verified against a real deployment** — they
   work locally, but the nightly jobs are the part of this app that runs
   unattended, so they're worth watching for the first few nights via the
