@@ -22,7 +22,16 @@ type CartrackOdometerResponse = {
   data: {
     vehicle_id: number;
     registration: string;
-    latest_event_ts: string | null;
+    /**
+     * The live API returns `last_event_ts`, NOT `latest_event_ts` as the
+     * OpenAPI spec's schema names it — verified against real responses for
+     * both fleet vehicles on 2026-09-15. Reading the spec's name silently
+     * yielded `undefined`, so every reading fell back to "now" (the moment
+     * the cron ran) instead of when the bike actually last reported.
+     * `terminal_serial` is read to detect tracker swaps (see sync.ts).
+     */
+    last_event_ts: string | null;
+    terminal_serial: string | null;
     current_odometer_value: number | null;
     start_odometer_value: number | null;
     end_odometer_value: number | null;
@@ -104,7 +113,8 @@ export class CartrackProvider implements TelematicsProvider {
       return {
         ok: true,
         km: Math.round(meters / 1000),
-        recordedAt: parseTimestamp(odometerResponse.data?.latest_event_ts) ?? end,
+        recordedAt: parseTimestamp(odometerResponse.data?.last_event_ts) ?? end,
+        deviceId: odometerResponse.data?.terminal_serial ?? null,
         raw: odometerResponse,
       };
     }
@@ -127,6 +137,9 @@ export class CartrackProvider implements TelematicsProvider {
           ok: true,
           km: Math.round(latestWithOdometer.end_odometer / 1000),
           recordedAt: parseTimestamp(latestWithOdometer.end_timestamp) ?? end,
+          // The trips endpoint doesn't carry a terminal serial; the
+          // odometer response may still have one from the same call.
+          deviceId: odometerResponse.data?.terminal_serial ?? null,
           raw: { odometerResponse, tripsResponse },
         };
       }

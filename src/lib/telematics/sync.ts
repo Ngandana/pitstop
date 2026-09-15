@@ -1,5 +1,5 @@
 import "server-only";
-import { desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { bikes, odometerReadings, organisations, reminders, telematicsSyncLog, users } from "@/db/schema";
 import { validateOdometerReading } from "./validate-odometer";
@@ -34,7 +34,7 @@ export async function syncBikeOdometer(params: {
   }
 
   const [latest] = await db
-    .select({ km: odometerReadings.readingKm })
+    .select({ km: odometerReadings.readingKm, recordedAt: odometerReadings.recordedAt })
     .from(odometerReadings)
     .where(eq(odometerReadings.bikeId, bike.id))
     .orderBy(desc(odometerReadings.recordedAt))
@@ -55,21 +55,35 @@ export async function syncBikeOdometer(params: {
     return { bikeId: bike.id, registration: bike.registration, status: "failed", detail: result.error };
   }
 
-  const validation = validateOdometerReading({ previousKm, newKm: result.km, override: false });
+  const daysElapsed = latest
+    ? (result.recordedAt.getTime() - latest.recordedAt.getTime()) / 86_400_000
+    : null;
+
+  const validation = validateOdometerReading({
+    previousKm,
+    newKm: result.km,
+    override: false,
+    daysElapsed,
+  });
   if (!validation.valid) {
+    // A replaced tracker restarts its odometer near zero, which looks
+    // identical to a corrupt backwards reading. Saying so turns an opaque
+    // rejection into an actionable one: the fix is to re-baseline the bike
+    // via manual entry with "override" ticked, not to chase a data fault.
+    const reason = `${validation.reason}${await trackerSwapHint(bike.id, result.deviceId)}`;
     await logSyncAttempt({
       orgId: bike.orgId,
       bikeId: bike.id,
       provider: provider.name,
       succeeded: false,
-      error: `Rejected: ${validation.reason}`,
+      error: `Rejected: ${reason}`,
     });
     await maybeAlertOnConsecutiveFailures(bike);
     return {
       bikeId: bike.id,
       registration: bike.registration,
       status: "rejected",
-      detail: validation.reason,
+      detail: reason,
     };
   }
 
@@ -106,6 +120,49 @@ export async function syncAllBikes(provider: TelematicsProvider): Promise<SyncOu
     results.push(await syncBikeOdometer({ bike, provider }));
   }
   return results;
+}
+
+/**
+ * Compares the tracker that produced this reading against the one behind
+ * the bike's last stored Cartrack reading. Returns a sentence to append to
+ * a rejection reason, or "" when there's nothing useful to say (no device
+ * id from the provider, no prior payload, or the same device as before).
+ *
+ * Reads the serial back out of the stored raw payload rather than adding a
+ * column — rawPayload is kept precisely so questions like this can be
+ * answered after the fact, and this avoids a schema change.
+ */
+async function trackerSwapHint(bikeId: string, currentDeviceId: string | null): Promise<string> {
+  if (!currentDeviceId) return "";
+
+  const [previous] = await db
+    .select({ rawPayload: odometerReadings.rawPayload })
+    .from(odometerReadings)
+    .where(and(eq(odometerReadings.bikeId, bikeId), eq(odometerReadings.source, "cartrack")))
+    .orderBy(desc(odometerReadings.recordedAt))
+    .limit(1);
+  if (!previous) return "";
+
+  const previousDeviceId = extractTerminalSerial(previous.rawPayload);
+  if (!previousDeviceId || previousDeviceId === currentDeviceId) return "";
+
+  return ` The tracker appears to have been replaced (was ${previousDeviceId}, now ${currentDeviceId}), which restarts the odometer — re-baseline this bike with a manual reading and "override" ticked.`;
+}
+
+/** Digs terminal_serial out of either raw payload shape the client stores. */
+function extractTerminalSerial(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") return null;
+  const root = payload as Record<string, unknown>;
+  // Odometer-endpoint shape: { data: { terminal_serial } }
+  const direct = (root.data as Record<string, unknown> | undefined)?.terminal_serial;
+  if (typeof direct === "string" && direct) return direct;
+  // Trips-fallback shape: { odometerResponse: { data: { terminal_serial } } }
+  const nested = (
+    (root.odometerResponse as Record<string, unknown> | undefined)?.data as
+      | Record<string, unknown>
+      | undefined
+  )?.terminal_serial;
+  return typeof nested === "string" && nested ? nested : null;
 }
 
 async function logSyncAttempt(params: {
