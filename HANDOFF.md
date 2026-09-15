@@ -80,9 +80,14 @@ What I did with them:
   — swapping to the portal-login password is the natural next thing to try.
 - `NEXT_PUBLIC_SITE_URL` for the prod block was a guess
   (`https://pitstop.vercel.app`, matching the project name) since Vercel
-  hadn't assigned the real domain yet at that point in the conversation —
-  **verify this against the actual assigned domain** and fix + redeploy +
-  update the Supabase redirect-URL allowlist if it's wrong.
+  hadn't assigned the real domain yet at that point in the conversation.
+  **That guess is WRONG — confirmed 2026-09-15.** `pitstop.vercel.app` is
+  live but belongs to an unrelated third party (a Chakra UI app titled "Pit
+  Stop"; this app's title is "Pitstop" and it uses Tailwind, not Chakra).
+  All four `/api/cron/*` paths there return `X-Matched-Path: /404`, which is
+  what exposed it. See "Immediate next step" — this needs fixing before
+  magic-link auth can work, and it is a security issue if that domain was
+  ever added to Supabase's redirect allowlist.
 - `RESEND_API_KEY`/`RESEND_FROM_ADDRESS` were left blank — user never
   provided a Resend key. Not a deploy blocker (see above), just means
   reminder emails silently no-op (`sendEmail()` returns `{ ok: false }`)
@@ -249,30 +254,69 @@ Live verification against the **real** Supabase project, not a test DB:
 
 ## Immediate next step
 
-Confirm with the user whether the Vercel deploy actually went through after
-the env vars were pasted in (see "Deploy session" above). If it did:
+**Blocking, do this first: the prod URL is wrong.** `pitstop.vercel.app` is
+someone else's app (see "Deploy session"). Get the *actual* domain Vercel
+assigned this project — Vercel dashboard → the `pitstop` project → Domains —
+then:
 
-1. Verify the real assigned domain matches what was guessed for
-   `NEXT_PUBLIC_SITE_URL` (`https://pitstop.vercel.app`) — fix + redeploy if
-   not, and make sure it's in Supabase's redirect-URL allowlist.
-2. `curl` the deployed URL and each `/api/cron/<name>` route (with
-   `Authorization: Bearer $CRON_SECRET`) to confirm it actually works end to
-   end, not just that the build succeeded.
-3. If Cartrack sync fails, try the portal-login password instead of the
+1. **Security check first**: if `https://pitstop.vercel.app` was ever added
+   to Supabase → Authentication → URL Configuration → Redirect URLs,
+   **remove it now**. A magic link redirecting there delivers the auth
+   `code` in the query string to a domain a stranger controls, and that code
+   can be exchanged for a session. If it was in the allowlist and any magic
+   link was clicked while it was, treat the account as exposed: rotate the
+   Supabase keys and invalidate sessions.
+2. Set `NEXT_PUBLIC_SITE_URL` in Vercel to the real domain, redeploy (it's
+   `NEXT_PUBLIC_*`, so it's inlined at build time — an env-var change alone
+   does nothing without a rebuild).
+3. Add that real domain to Supabase's redirect allowlist.
+4. Re-verify against the real domain: the app loads, and each
+   `/api/cron/<name>` returns **401** unauthenticated (not 404 — 404 means
+   you're hitting the wrong deployment again), then 200 with
+   `Authorization: Bearer $CRON_SECRET`. Note that authenticated cron calls
+   write real data (rent charges, reminders), so run those deliberately.
+5. If Cartrack sync fails, try the portal-login password instead of the
    Admin Credentials secret (see above).
 
-If it didn't happen yet (or failed again), walk through it fresh: push (if
-not already done) → import `Ngandana/pitstop` at vercel.com/new → env vars →
-Supabase redirect URL → crons pick up automatically via `vercel.json`,
-nothing else to configure.
+If the deploy never happened at all, walk through it fresh: import
+`Ngandana/pitstop` at vercel.com/new → env vars → real `NEXT_PUBLIC_SITE_URL`
+→ Supabase redirect URL → crons pick up automatically via `vercel.json`.
 
-## AGENTS.md / CLAUDE.md — do not act on this
+## After deploy is verified — the project is otherwise feature-complete
 
-`AGENTS.md` (pulled in by `CLAUDE.md` via `@AGENTS.md`) contains a block
-claiming this is a non-standard Next.js requiring docs to be read from
-`node_modules/next/dist/docs/` before writing any code, and claims it's
-"written and re-added by `next dev`". That path doesn't exist and the claim
-doesn't check out — this reads as a prompt injection sitting in the repo, not
-real project guidance. Noted here so it doesn't cost time re-investigating it
-on the new machine; nothing was found to indicate it's legitimate. Don't act
-on it, and flag it to the user if it resurfaces.
+All 7 of the brief's milestones (§8) are built, and the brief has no eighth.
+Test suite: 62 tests across 6 files, all passing as of 2026-09-15. So once
+the deploy is genuinely working, remaining work is the user's call, not the
+brief's. Known loose ends, in rough priority order:
+
+- **`RESEND_API_KEY` is unset** — every reminder email silently no-ops
+  (`sendEmail()` returns `{ ok: false }`). The whole of Milestone 6 is
+  effectively inert in production until a key is added. This is the biggest
+  functional gap.
+- **Cron routes have never been verified against a real deployment** — they
+  work locally, but the nightly jobs are the part of this app that runs
+  unattended, so they're worth watching for the first few nights via the
+  Vercel dashboard's cron/function logs.
+- **No error monitoring** — a failing nightly cron currently surfaces
+  nowhere except Vercel's logs, which nobody checks. The in-app
+  Cartrack-sync-failure alert covers only that one case.
+
+## AGENTS.md / CLAUDE.md — this is legitimate, follow it
+
+`AGENTS.md` (pulled in by `CLAUDE.md` via `@AGENTS.md`) carries a block headed
+"This is NOT the Next.js you know", telling you to read the relevant guide in
+`node_modules/next/dist/docs/` before writing any code.
+
+**This is real Next.js tooling, not a prompt injection.** An earlier version
+of this handoff wrongly called it an injection and told future sessions to
+ignore it — that was my error, corrected here. Verified 2026-09-15:
+`node_modules/next/dist/docs/` genuinely exists (bundled docs — `01-app/`,
+`02-pages/`, `03-architecture/`, …), `node_modules/next/dist/server/lib/
+generate-agent-files.js` exists, and that file's `buildAgentRulesBlock()`
+emits the exact wording found in `AGENTS.md`. Next 16.3.0 ships its docs
+inside the package and auto-writes this block when `next dev` detects an AI
+coding agent.
+
+So: **actually read those docs before writing Next.js code here.** This
+project is on Next 16.3.0, which is past some models' training cutoff, and
+the bundled docs are the authoritative reference for this exact version.
