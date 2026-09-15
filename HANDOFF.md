@@ -1,10 +1,10 @@
 # Pitstop — session handoff
 
-Written 2026-08-22, updated 2026-08-28 (deploy session), for continuing this
-project on a different machine. Paste this file's content (or just point
-Claude Code at it) at the start of a new session, after cloning the repo and
-running `npm install` + copying over a real `.env.local` (see `.env.example`
-/ README "Local setup").
+Written 2026-08-22, updated 2026-08-28 (deploy session) and 2026-09-15
+(deploy verified live), for continuing this project on a different machine.
+Paste this file's content (or just point Claude Code at it) at the start of
+a new session, after cloning the repo and running `npm install` + copying
+over a real `.env.local` (see `.env.example` / README "Local setup").
 
 **Credentials are deliberately NOT in this file** (or anywhere in git — see
 "Deploy session" below for why). To continue on a new machine you need to
@@ -23,7 +23,7 @@ multi-tenant UI). The full spec is checked into the repo verbatim at
 every scope/formula/schema decision. Read it before making any non-trivial
 change. Section references below (§3, §5, etc.) point into that file.
 
-## Status: all 7 milestones done, mid-deploy
+## Status: all 7 milestones done, deployed and verified live
 
 The brief's build order (§8) has exactly 7 milestones; all 7 are built and
 committed:
@@ -37,9 +37,12 @@ committed:
 7. Polish pass — §9 checklist fixes, plus building out the previously-stubbed
    `/settings` screen for real (see "Notable decisions" below)
 
-**Where we actually are right now:** the user asked to deploy to Vercel next
-(not part of the original 7 milestones — the brief's build order stops at
-"polish pass"). `main` is pushed to `origin/main` (confirmed in sync).
+**Where we actually are right now:** deployed to Vercel (not part of the
+original 7 milestones — the brief's build order stops at "polish pass") and
+**confirmed working end to end as of 2026-09-15**. Production URL:
+**`https://pitstop-opal.vercel.app`**. `main` is pushed to `origin/main`
+(confirmed in sync). See "Deploy session" for the two config bugs hit and
+fixed along the way, and "Verified 2026-09-15" for what was actually checked.
 
 ## Deploy session (2026-08-28)
 
@@ -93,11 +96,36 @@ What I did with them:
   reminder emails silently no-op (`sendEmail()` returns `{ ok: false }`)
   until one's added.
 
-**Whether the user actually pasted that block into Vercel and got a
-successful redeploy is unknown to this session** — the conversation moved on
-before confirming. That, plus verifying `NEXT_PUBLIC_SITE_URL`/the Supabase
-redirect URL, is the natural thing to check in on next (see "Immediate next
-step").
+## Verified 2026-09-15 — deploy is genuinely working
+
+The wrong-domain bug above got caught by this session and fixed:
+
+1. User confirmed the real Vercel-assigned domain is
+   `https://pitstop-opal.vercel.app` (not the guessed `pitstop.vercel.app`).
+   Checked Supabase's redirect allowlist first — it only ever had
+   `http://localhost:3000/**` in it, so the wrong domain was never actually
+   reachable via a real magic link. No exposure occurred.
+2. User added `https://pitstop-opal.vercel.app/**` to Supabase's Redirect
+   URLs and updated Site URL, and updated `NEXT_PUBLIC_SITE_URL` in Vercel to
+   match, then redeployed.
+3. This session then verified live, not just "build succeeded":
+   - `https://pitstop-opal.vercel.app/` → 307 to `/login?next=%2F` (correct
+     for an unauthenticated visitor).
+   - All four `/api/cron/*` routes → 401 unauthenticated (not 404 — confirms
+     this is actually the app, and the auth gate works).
+   - Generated a real magic link via Supabase's Admin API
+     (`auth/v1/admin/generate_link`) and inspected its `redirect_to`
+     query param directly — it resolved to `https://pitstop-opal.vercel.app`,
+     proving the env var change was both saved *and* actually picked up by
+     the redeploy (NEXT_PUBLIC_* vars are inlined at build time, so this is
+     the one way to be sure a stale build isn't still serving the old value).
+
+**Not yet verified**: an authenticated cron run in production (only checked
+the 401-unauthenticated path deliberately, since a real run writes rent
+charges/reminders) and Cartrack sync specifically (still the
+Admin-Credentials-vs-portal-password question from "Deploy session" above,
+untested against prod). Both are reasonable next checks but not blocking —
+the app is live and usable now.
 
 ## Standing rules (from the brief, §10 — still in force)
 
@@ -254,35 +282,23 @@ Live verification against the **real** Supabase project, not a test DB:
 
 ## Immediate next step
 
-**Blocking, do this first: the prod URL is wrong.** `pitstop.vercel.app` is
-someone else's app (see "Deploy session"). Get the *actual* domain Vercel
-assigned this project — Vercel dashboard → the `pitstop` project → Domains —
-then:
+Deploy is done and verified (see "Verified 2026-09-15"). Nothing is
+blocking. In rough priority order, pick up with:
 
-1. **Security check first**: if `https://pitstop.vercel.app` was ever added
-   to Supabase → Authentication → URL Configuration → Redirect URLs,
-   **remove it now**. A magic link redirecting there delivers the auth
-   `code` in the query string to a domain a stranger controls, and that code
-   can be exchanged for a session. If it was in the allowlist and any magic
-   link was clicked while it was, treat the account as exposed: rotate the
-   Supabase keys and invalidate sessions.
-2. Set `NEXT_PUBLIC_SITE_URL` in Vercel to the real domain, redeploy (it's
-   `NEXT_PUBLIC_*`, so it's inlined at build time — an env-var change alone
-   does nothing without a rebuild).
-3. Add that real domain to Supabase's redirect allowlist.
-4. Re-verify against the real domain: the app loads, and each
-   `/api/cron/<name>` returns **401** unauthenticated (not 404 — 404 means
-   you're hitting the wrong deployment again), then 200 with
-   `Authorization: Bearer $CRON_SECRET`. Note that authenticated cron calls
-   write real data (rent charges, reminders), so run those deliberately.
-5. If Cartrack sync fails, try the portal-login password instead of the
-   Admin Credentials secret (see above).
+1. **Add `RESEND_API_KEY`** (see below — biggest actual gap right now).
+2. Trigger one real authenticated cron run per route and confirm it does
+   the right thing against production data — the routes are proven to be
+   *reachable and auth-gated* (401 check above), but no authenticated call
+   has actually been made against prod yet. These write real data, so do
+   this deliberately, one route at a time, and check the result before
+   moving to the next: `curl -H "Authorization: Bearer $CRON_SECRET"
+   https://pitstop-opal.vercel.app/api/cron/<name>`.
+3. Confirm Cartrack sync works against prod specifically — resolves the
+   Admin-Credentials-vs-portal-password open question from "Deploy session".
+4. Watch the Vercel dashboard's cron/function logs for the first few nights
+   once crons start firing on their real schedule (see `vercel.json`).
 
-If the deploy never happened at all, walk through it fresh: import
-`Ngandana/pitstop` at vercel.com/new → env vars → real `NEXT_PUBLIC_SITE_URL`
-→ Supabase redirect URL → crons pick up automatically via `vercel.json`.
-
-## After deploy is verified — the project is otherwise feature-complete
+## The project is otherwise feature-complete
 
 All 7 of the brief's milestones (§8) are built, and the brief has no eighth.
 Test suite: 62 tests across 6 files, all passing as of 2026-09-15. So once
