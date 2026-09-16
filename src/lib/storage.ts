@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 
 const HANDOVER_BUCKET = "handover-photos";
 const PAYMENT_PROOF_BUCKET = "payment-proofs";
+const DRIVER_PHOTO_BUCKET = "driver-photos";
 
 /**
  * Admin client, service-role key — never imported from client code
@@ -67,4 +68,40 @@ export async function getPaymentProofUrl(storageKey: string, expiresInSeconds = 
     .createSignedUrl(storageKey, expiresInSeconds);
   if (error || !data) return null;
   return data.signedUrl;
+}
+
+/**
+ * Keyed by driverId alone (one photo per driver, `upsert: true`) rather
+ * than a UUID per upload — unlike handover photos there's no "history" to
+ * keep here, a new photo just replaces the old one.
+ */
+export async function uploadDriverPhoto(params: {
+  driverId: string;
+  file: Blob;
+  contentType: string;
+}): Promise<string> {
+  const key = `${params.driverId}.jpg`;
+  const { error } = await storageAdmin()
+    .storage.from(DRIVER_PHOTO_BUCKET)
+    .upload(key, params.file, { contentType: params.contentType, upsert: true });
+  if (error) {
+    throw new Error(`Driver photo upload failed: ${error.message}`);
+  }
+  return key;
+}
+
+/** Signed URL, short-lived — the bucket is private (a driver's face, on its own). */
+export async function getDriverPhotoUrl(storageKey: string, expiresInSeconds = 300) {
+  const { data, error } = await storageAdmin()
+    .storage.from(DRIVER_PHOTO_BUCKET)
+    .createSignedUrl(storageKey, expiresInSeconds);
+  if (error || !data) return null;
+  return data.signedUrl;
+}
+
+export async function deleteDriverPhoto(storageKey: string): Promise<void> {
+  const { error } = await storageAdmin().storage.from(DRIVER_PHOTO_BUCKET).remove([storageKey]);
+  if (error) {
+    throw new Error(`Driver photo delete failed: ${error.message}`);
+  }
 }

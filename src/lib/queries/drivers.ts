@@ -2,6 +2,7 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { assignments, bikes, drivers } from "@/db/schema";
 import { getDriverBalances } from "@/lib/queries/money";
+import { getDriverPhotoUrl } from "@/lib/storage";
 
 export type DriverListRow = {
   id: string;
@@ -11,6 +12,7 @@ export type DriverListRow = {
   bikeRegistration: string | null;
   balanceCents: number;
   daysInArrears: number;
+  photoUrl: string | null;
 };
 
 export async function listDrivers(orgId: string): Promise<DriverListRow[]> {
@@ -40,6 +42,7 @@ export async function listDrivers(orgId: string): Promise<DriverListRow[]> {
         bikeRegistration: openAssignment?.registration ?? null,
         balanceCents: balance?.balanceCents ?? 0,
         daysInArrears: balance?.daysInArrears ?? 0,
+        photoUrl: driver.photoStorageKey ? await getDriverPhotoUrl(driver.photoStorageKey) : null,
       };
     }),
   );

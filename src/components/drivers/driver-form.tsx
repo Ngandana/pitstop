@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { DriverPhotoField } from "./driver-photo-field";
 import type { FormResult } from "@/app/(app)/fleet/actions";
 
 type DriverDefaults = {
@@ -14,6 +15,7 @@ type DriverDefaults = {
   licenceNumber?: string | null;
   licenceExpiresOn?: string | null;
   notes?: string | null;
+  photoUrl?: string | null;
 };
 
 export function DriverForm({
@@ -36,6 +38,8 @@ export function DriverForm({
           {state.error}
         </p>
       ) : null}
+
+      <DriverPhotoField existingPhotoUrl={defaults?.photoUrl} />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Full name" error={fieldError("fullName")}>

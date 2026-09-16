@@ -7,6 +7,7 @@ import type { DriverListRow } from "@/lib/queries/drivers";
 import { formatCents, formatDate } from "@/lib/format";
 import { daysUntil } from "@/lib/action-items";
 import { cn } from "@/lib/utils";
+import { DriverAvatar } from "@/components/drivers/driver-avatar";
 
 function LicenceExpiry({ date }: { date: string | null }) {
   if (!date) return <span className="text-text-muted">—</span>;
@@ -65,8 +66,13 @@ export function DriverList({ drivers }: { drivers: DriverListRow[] }) {
               href={`/drivers/${d.id}`}
               className="block rounded-xl border border-border bg-surface-raised p-4 shadow-sm transition-colors duration-150 hover:border-accent/40"
             >
-              <p className="text-base font-bold tracking-tight text-foreground">{d.fullName}</p>
-              <p className="text-xs text-text-secondary">{d.phoneE164}</p>
+              <div className="flex items-center gap-3">
+                <DriverAvatar photoUrl={d.photoUrl} name={d.fullName} />
+                <div>
+                  <p className="text-base font-bold tracking-tight text-foreground">{d.fullName}</p>
+                  <p className="text-xs text-text-secondary">{d.phoneE164}</p>
+                </div>
+              </div>
               <div className="mt-3 flex items-center justify-between text-xs">
                 <span className="text-text-secondary">{d.bikeRegistration ?? "No bike"}</span>
                 <LicenceExpiry date={d.licenceExpiresOn} />
@@ -110,8 +116,9 @@ export function DriverList({ drivers }: { drivers: DriverListRow[] }) {
                 <td className="px-4 py-3 whitespace-nowrap">
                   <Link
                     href={`/drivers/${d.id}`}
-                    className="font-semibold text-foreground hover:text-accent"
+                    className="flex items-center gap-2.5 font-semibold text-foreground hover:text-accent"
                   >
+                    <DriverAvatar photoUrl={d.photoUrl} name={d.fullName} size="size-8" />
                     {d.fullName}
                   </Link>
                 </td>

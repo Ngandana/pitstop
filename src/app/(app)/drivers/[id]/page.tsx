@@ -3,10 +3,11 @@ import { notFound } from "next/navigation";
 import { ChevronLeft, Pencil, IdCard, Phone, Bike as BikeIcon } from "lucide-react";
 import { getDriverDetail } from "@/lib/queries/drivers";
 import { getDriverMoneySummary } from "@/lib/queries/money";
-import { getPaymentProofUrl } from "@/lib/storage";
+import { getDriverPhotoUrl, getPaymentProofUrl } from "@/lib/storage";
 import { EndAssignmentForm } from "@/components/assignments/end-assignment-form";
 import { PaymentForm } from "@/components/drivers/payment-form";
 import { DriverMoneySection } from "@/components/drivers/driver-money-section";
+import { DriverAvatar } from "@/components/drivers/driver-avatar";
 import { formatCents, formatDate, formatKm } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -19,6 +20,7 @@ export default async function DriverDetailPage({ params }: PageProps<"/drivers/[
 
   const { driver, openAssignment, assignments } = detail;
   const money = await getDriverMoneySummary(id);
+  const photoUrl = driver.photoStorageKey ? await getDriverPhotoUrl(driver.photoStorageKey) : null;
 
   const paymentsWithProof = await Promise.all(
     money.payments.map(async (p) => ({
@@ -40,7 +42,10 @@ export default async function DriverDetailPage({ params }: PageProps<"/drivers/[
           Drivers
         </Link>
         <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-hero text-foreground">{driver.fullName}</h1>
+          <div className="flex items-center gap-3">
+            <DriverAvatar photoUrl={photoUrl} name={driver.fullName} size="size-14" />
+            <h1 className="text-hero text-foreground">{driver.fullName}</h1>
+          </div>
           <Link
             href={`/drivers/${driver.id}/edit`}
             className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-border px-4 text-sm font-medium text-foreground transition-colors duration-150 hover:bg-surface-sunken"

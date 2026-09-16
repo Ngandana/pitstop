@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { drivers } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { DriverForm } from "@/components/drivers/driver-form";
+import { getDriverPhotoUrl } from "@/lib/storage";
 import { updateDriver } from "../../actions";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +15,7 @@ export default async function EditDriverPage({ params }: PageProps<"/drivers/[id
   const driver = await db.query.drivers.findFirst({ where: eq(drivers.id, id) });
   if (!driver) notFound();
 
+  const photoUrl = driver.photoStorageKey ? await getDriverPhotoUrl(driver.photoStorageKey) : null;
   const action = updateDriver.bind(null, driver.id);
 
   return (
@@ -39,6 +41,7 @@ export default async function EditDriverPage({ params }: PageProps<"/drivers/[id
             licenceNumber: driver.licenceNumber,
             licenceExpiresOn: driver.licenceExpiresOn,
             notes: driver.notes,
+            photoUrl,
           }}
         />
       </div>

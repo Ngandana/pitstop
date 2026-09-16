@@ -1,0 +1,1 @@
+ALTER TABLE "drivers" ADD COLUMN "photo_storage_key" text;

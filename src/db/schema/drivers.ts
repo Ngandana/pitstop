@@ -16,6 +16,13 @@ export const drivers = pgTable("drivers", {
   trackingConsentAt: timestamp("tracking_consent_at", { withTimezone: true }),
   trackingConsentVersion: text("tracking_consent_version"),
   notes: text("notes"),
+  /**
+   * Storage key in the private "driver-photos" bucket, not a public URL —
+   * a driver's face is exactly the kind of thing that shouldn't be
+   * publicly reachable (same reasoning as handover_photos). Read back
+   * through a short-lived signed URL, see src/lib/storage.ts.
+   */
+  photoStorageKey: text("photo_storage_key"),
   /** Soft delete — drivers are never hard-deleted, they have payment/rent history. */
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

@@ -2,15 +2,16 @@
  * Creates the private Supabase Storage buckets the app uploads photos to.
  * Idempotent — safe to re-run. Run with: npm run storage:setup
  *
- * Both are private: handover photos can include a driver's face, vehicle
- * registration, and existing-damage close-ups; payment proofs can show a
- * driver's phone number or banking app UI. Reads go through signed URLs
- * (src/lib/storage.ts), never a public bucket URL.
+ * All three are private: handover photos can include a driver's face,
+ * vehicle registration, and existing-damage close-ups; payment proofs can
+ * show a driver's phone number or banking app UI; driver photos are a
+ * face on their own. Reads go through signed URLs (src/lib/storage.ts),
+ * never a public bucket URL.
  */
 import { config } from "dotenv";
 config({ path: ".env.local" });
 
-const BUCKETS = ["handover-photos", "payment-proofs"];
+const BUCKETS = ["handover-photos", "payment-proofs", "driver-photos"];
 
 async function main() {
   const { createClient } = await import("@supabase/supabase-js");
