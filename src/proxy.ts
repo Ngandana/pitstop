@@ -17,6 +17,6 @@ export const config = {
     // HTML redirect to /login. Caught live: without this, an unauthenticated
     // request to /api/cron/mileage-sync got a 307 to /login before the
     // route handler's own auth check ever ran.
-    "/((?!_next/static|_next/image|favicon.ico|api/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|offline.html|api/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
