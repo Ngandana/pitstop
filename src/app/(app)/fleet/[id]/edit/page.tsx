@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { db } from "@/db";
 import { bikes } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
+import { getCurrentOrg } from "@/lib/queries/org";
 import { BikeForm } from "@/components/fleet/bike-form";
 import { updateBike } from "../../actions";
 
@@ -11,7 +12,10 @@ export const dynamic = "force-dynamic";
 
 export default async function EditBikePage({ params }: PageProps<"/fleet/[id]/edit">) {
   const { id } = await params;
-  const bike = await db.query.bikes.findFirst({ where: eq(bikes.id, id) });
+  const org = await getCurrentOrg();
+  const bike = await db.query.bikes.findFirst({
+    where: and(eq(bikes.id, id), eq(bikes.orgId, org.id)),
+  });
   if (!bike) notFound();
 
   const action = updateBike.bind(null, bike.id);

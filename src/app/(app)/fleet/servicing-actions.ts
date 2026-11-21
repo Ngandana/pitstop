@@ -7,6 +7,7 @@ import { odometerReadings, serviceSchedules, services } from "@/db/schema";
 import { logServiceSchema, updateServiceScheduleSchema } from "@/lib/validation/servicing";
 import { validateOdometerReading } from "@/lib/telematics/validate-odometer";
 import { getCurrentOrg } from "@/lib/queries/org";
+import { findBikeInOrg } from "@/lib/queries/ownership";
 import type { FormResult } from "./actions";
 
 function centsFromRands(rands: number | null | undefined): number | null {
@@ -46,6 +47,7 @@ export async function logService(
   const override = formData.get("override") === "on";
 
   const org = await getCurrentOrg();
+  if (!(await findBikeInOrg(org.id, bikeId))) return { ok: false, error: "Bike not found." };
   const schedule = await db.query.serviceSchedules.findFirst({
     where: and(eq(serviceSchedules.bikeId, bikeId), eq(serviceSchedules.serviceTypeId, data.serviceTypeId)),
   });
@@ -126,6 +128,9 @@ export async function updateServiceSchedule(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Check the values." };
   }
 
+  const org = await getCurrentOrg();
+  if (!(await findBikeInOrg(org.id, bikeId))) return { ok: false, error: "Bike not found." };
+
   try {
     await db
       .update(serviceSchedules)
@@ -134,7 +139,13 @@ export async function updateServiceSchedule(
         maxIntervalDays: parsed.data.maxIntervalDays,
         updatedAt: new Date(),
       })
-      .where(eq(serviceSchedules.id, scheduleId));
+      .where(
+        and(
+          eq(serviceSchedules.id, scheduleId),
+          eq(serviceSchedules.bikeId, bikeId),
+          eq(serviceSchedules.orgId, org.id),
+        ),
+      );
   } catch {
     return { ok: false, error: "Couldn't save. Try again." };
   }

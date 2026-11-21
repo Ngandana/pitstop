@@ -55,7 +55,7 @@ export function ActionItemCard({ item }: { item: ActionItem }) {
           </p>
           <SendToDriverButton
             phoneE164={item.phoneE164}
-            message={`Hi ${item.driverName}, your driver's licence ${dayLabel}. Please renew it and send through a copy when you can. - Pitstop`}
+            message={`Hi ${item.driverName}, your driver's licence ${dayLabel}. Please renew it and send through a copy when you can. - RideStack`}
           />
         </div>
       </li>
@@ -84,7 +84,7 @@ export function ActionItemCard({ item }: { item: ActionItem }) {
           {item.phoneE164 && item.driverName && (
             <SendToDriverButton
               phoneE164={item.phoneE164}
-              message={`Hi ${item.driverName}, ${item.registration} is ${statusLabel} for a service (${item.serviceLabel}). Please bring it in when you can. - Pitstop`}
+              message={`Hi ${item.driverName}, ${item.registration} is ${statusLabel} for a service (${item.serviceLabel}). Please bring it in when you can. - RideStack`}
             />
           )}
         </div>
@@ -109,7 +109,7 @@ export function ActionItemCard({ item }: { item: ActionItem }) {
           </p>
           <SendToDriverButton
             phoneE164={item.phoneE164}
-            message={`Hi ${item.driverName}, your rent account is ${item.daysInArrears} day${item.daysInArrears === 1 ? "" : "s"} behind - you owe ${formatCents(item.balanceCents)}. Please settle when you can. - Pitstop`}
+            message={`Hi ${item.driverName}, your rent account is ${item.daysInArrears} day${item.daysInArrears === 1 ? "" : "s"} behind - you owe ${formatCents(item.balanceCents)}. Please settle when you can. - RideStack`}
           />
         </div>
       </li>
@@ -128,7 +128,7 @@ export function ActionItemCard({ item }: { item: ActionItem }) {
         </p>
         <SendToDriverButton
           phoneE164={item.phoneE164}
-          message={`Hi ${item.driverName}, ${item.registration} hasn't shown any movement since ${formatDate(item.lastReadingAt, "d MMM, HH:mm")}. Please check in when you get a chance. - Pitstop`}
+          message={`Hi ${item.driverName}, ${item.registration} hasn't shown any movement since ${formatDate(item.lastReadingAt, "d MMM, HH:mm")}. Please check in when you get a chance. - RideStack`}
         />
       </div>
     </li>

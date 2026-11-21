@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
+import { Suspense, useActionState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Loader2, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,14 +11,23 @@ import { requestMagicLink, type MagicLinkResult } from "./actions";
 const initialState: MagicLinkResult | null = null;
 
 export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const [state, formAction, pending] = useActionState(requestMagicLink, initialState);
+  const urlError = useSearchParams().get("error");
 
   return (
     <main className="flex min-h-dvh items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Pitstop</h1>
-          <p className="mt-1 text-sm text-text-secondary">Fleet operations, not guesswork.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">RideStack</h1>
+          <p className="mt-1 text-sm text-text-secondary">Run your fleet from your phone.</p>
         </div>
 
         <div className="rounded-xl border border-border bg-surface-raised p-6 shadow-md">
@@ -33,6 +43,13 @@ export default function LoginPage() {
             </div>
           ) : (
             <form action={formAction} className="flex flex-col gap-4">
+              {urlError ? (
+                <p className="text-sm text-danger" role="alert">
+                  {urlError === "invite"
+                    ? "That email has not been invited yet."
+                    : "That sign-in link did not work. Request a new one."}
+                </p>
+              ) : null}
               <div className="flex flex-col gap-2">
                 <Label htmlFor="email">Email address</Label>
                 <Input

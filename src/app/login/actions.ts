@@ -1,16 +1,19 @@
 "use server";
 
+import { eq } from "drizzle-orm";
+import { db } from "@/db";
+import { invites } from "@/db/schema";
+import { isPlatformAdmin } from "@/lib/queries/org";
 import { createClient } from "@/lib/supabase/server";
 import { magicLinkRequestSchema } from "@/lib/validation/auth";
 
 export type MagicLinkResult = { ok: true } | { ok: false; error: string };
 
 /**
- * Single-owner account: only the configured OWNER_EMAIL may request a
- * magic link. Any other address gets the same generic response either
+ * Invite-only: only the platform admin (OWNER_EMAIL) or an invited email may
+ * request a magic link. Anyone else gets the same generic response either
  * way, so this doesn't double as an email-enumeration oracle. (Format
- * validation errors below are about input shape, not account existence,
- * so returning them directly doesn't reopen that oracle.)
+ * validation errors are about input shape, not account existence.)
  */
 export async function requestMagicLink(
   _prev: MagicLinkResult | null,
@@ -22,10 +25,13 @@ export async function requestMagicLink(
   }
   const { email } = parsed.data;
 
-  const ownerEmail = process.env.OWNER_EMAIL?.trim().toLowerCase();
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
-  if (!ownerEmail || email !== ownerEmail) {
+  const invited =
+    isPlatformAdmin(email) ||
+    !!(await db.query.invites.findFirst({ where: eq(invites.email, email.toLowerCase()) }));
+
+  if (!invited) {
     // Deliberately identical to the success path — see doc comment above.
     return { ok: true };
   }

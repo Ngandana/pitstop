@@ -13,7 +13,7 @@ export function Sidebar({ userEmail }: { userEmail: string | null }) {
   return (
     <aside className="fixed inset-y-0 left-0 hidden w-60 flex-col border-r border-border bg-surface-raised md:flex">
       <div className="flex h-16 items-center px-5">
-        <span className="text-lg font-bold tracking-tight text-foreground">Pitstop</span>
+        <span className="text-lg font-bold tracking-tight text-foreground">RideStack</span>
       </div>
 
       <nav aria-label="Primary" className="flex-1 px-3 py-2">

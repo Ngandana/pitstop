@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
-import { assignments, drivers, handoverPhotos, odometerReadings } from "@/db/schema";
+import { assignments, bikes, drivers, handoverPhotos, odometerReadings } from "@/db/schema";
 import {
   HANDOVER_PHOTO_ANGLES,
   assignmentFormSchema,
@@ -37,18 +37,25 @@ export async function createAssignment(formData: FormData): Promise<FormResult> 
 
   const org = await getCurrentOrg();
 
-  const [bikeTaken, driverTaken, driver] = await Promise.all([
+  const [bikeTaken, driverTaken, driver, ownBike] = await Promise.all([
     db.query.assignments.findFirst({
       where: and(eq(assignments.bikeId, data.bikeId), isNull(assignments.endedAt)),
     }),
     db.query.assignments.findFirst({
       where: and(eq(assignments.driverId, data.driverId), isNull(assignments.endedAt)),
     }),
-    db.query.drivers.findFirst({ where: eq(drivers.id, data.driverId) }),
+    db.query.drivers.findFirst({
+      where: and(eq(drivers.id, data.driverId), eq(drivers.orgId, org.id)),
+    }),
+    db.query.bikes.findFirst({
+      where: and(eq(bikes.id, data.bikeId), eq(bikes.orgId, org.id)),
+      columns: { id: true },
+    }),
   ]);
   if (bikeTaken) return { ok: false, error: "This bike already has an open assignment." };
   if (driverTaken) return { ok: false, error: "This driver already has an open assignment." };
   if (!driver) return { ok: false, error: "Driver not found." };
+  if (!ownBike) return { ok: false, error: "Bike not found." };
 
   const assignmentId = crypto.randomUUID();
 
@@ -133,8 +140,9 @@ export async function endAssignment(
   }
   const { assignmentId, endOdometerKm, endReason } = parsed.data;
 
+  const org = await getCurrentOrg();
   const assignment = await db.query.assignments.findFirst({
-    where: eq(assignments.id, assignmentId),
+    where: and(eq(assignments.id, assignmentId), eq(assignments.orgId, org.id)),
   });
   if (!assignment) {
     return { ok: false, error: "Assignment not found." };
@@ -156,7 +164,7 @@ export async function endAssignment(
       await tx
         .update(assignments)
         .set({ endedAt, endOdometerKm, endReason, updatedAt: endedAt })
-        .where(eq(assignments.id, assignmentId));
+        .where(and(eq(assignments.id, assignmentId), eq(assignments.orgId, org.id)));
 
       await tx.insert(odometerReadings).values({
         orgId: assignment.orgId,

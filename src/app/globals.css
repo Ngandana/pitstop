@@ -5,7 +5,7 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Pitstop design tokens
+ * RideStack design tokens
  * ----------------------------------------------------------------
  * Warm neutral (stone) base + one decisive accent (deep teal).
  * Status ramp (amber -> orange -> red) is a deliberately different
@@ -58,7 +58,7 @@
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
 
-  /* Pitstop semantic tokens — the names the brief calls for directly */
+  /* RideStack semantic tokens — the names the brief calls for directly */
   --color-surface: var(--background);
   --color-surface-raised: var(--surface-raised);
   --color-surface-sunken: var(--surface-sunken);

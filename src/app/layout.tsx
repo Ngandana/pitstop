@@ -15,10 +15,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Pitstop",
+  title: "RideStack",
   description: "Fleet operations for scooter rentals.",
-  applicationName: "Pitstop",
-  appleWebApp: { capable: true, title: "Pitstop", statusBarStyle: "default" },
+  applicationName: "RideStack",
+  appleWebApp: { capable: true, title: "RideStack", statusBarStyle: "default" },
   icons: { apple: "/apple-touch-icon.png" },
 };
 

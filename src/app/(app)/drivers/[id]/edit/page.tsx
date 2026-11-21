@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { db } from "@/db";
 import { drivers } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
+import { getCurrentOrg } from "@/lib/queries/org";
 import { DriverForm } from "@/components/drivers/driver-form";
 import { getDriverPhotoUrl } from "@/lib/storage";
 import { updateDriver } from "../../actions";
@@ -12,7 +13,10 @@ export const dynamic = "force-dynamic";
 
 export default async function EditDriverPage({ params }: PageProps<"/drivers/[id]/edit">) {
   const { id } = await params;
-  const driver = await db.query.drivers.findFirst({ where: eq(drivers.id, id) });
+  const org = await getCurrentOrg();
+  const driver = await db.query.drivers.findFirst({
+    where: and(eq(drivers.id, id), eq(drivers.orgId, org.id)),
+  });
   if (!driver) notFound();
 
   const photoUrl = driver.photoStorageKey ? await getDriverPhotoUrl(driver.photoStorageKey) : null;

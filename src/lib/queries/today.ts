@@ -5,6 +5,7 @@ import type { bikeStatusEnum } from "@/db/schema";
 import { daysUntil, hasBikeStalled } from "@/lib/action-items";
 import { getDueServicesForOrg, getMostUrgentServiceStatusPerBike } from "@/lib/queries/servicing";
 import { getDriverBalances } from "@/lib/queries/money";
+import { getCurrentOrg } from "@/lib/queries/org";
 import type { ServiceStatus } from "@/lib/servicing/due-calc";
 
 export type TodayBike = {
@@ -109,10 +110,7 @@ export async function getStalledBikes(orgId: string, now: Date): Promise<Stalled
 
 /** Everything the Today screen needs, in one call. */
 export async function getTodayData(): Promise<TodayData> {
-  const org = await db.query.organisations.findFirst();
-  if (!org) {
-    return { orgName: null, bikes: [], actionItems: [] };
-  }
+  const org = await getCurrentOrg();
 
   const bikeRows = await db.query.bikes.findMany({
     where: and(eq(bikes.orgId, org.id), isNull(bikes.deletedAt)),

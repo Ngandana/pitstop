@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { drivers } from "@/db/schema";
 import { driverFormSchema } from "@/lib/validation/drivers";
@@ -83,6 +83,14 @@ export async function updateDriver(
     return { ok: false, error: "Check the highlighted fields.", fieldErrors };
   }
 
+  // Ownership check first — before any photo upload or write touches storage.
+  const org = await getCurrentOrg();
+  const owned = await db.query.drivers.findFirst({
+    where: and(eq(drivers.id, driverId), eq(drivers.orgId, org.id)),
+    columns: { id: true },
+  });
+  if (!owned) return { ok: false, error: "Driver not found." };
+
   const data = parsed.data;
   const photo = extractPhoto(formData);
   const removePhoto = formData.get("removePhoto") === "true";
@@ -103,7 +111,7 @@ export async function updateDriver(
     }
   } else if (removePhoto) {
     const existing = await db.query.drivers.findFirst({
-      where: eq(drivers.id, driverId),
+      where: and(eq(drivers.id, driverId), eq(drivers.orgId, org.id)),
       columns: { photoStorageKey: true },
     });
     if (existing?.photoStorageKey) {
@@ -128,7 +136,7 @@ export async function updateDriver(
         ...(photoStorageKey !== undefined ? { photoStorageKey } : {}),
         updatedAt: new Date(),
       })
-      .where(eq(drivers.id, driverId));
+      .where(and(eq(drivers.id, driverId), eq(drivers.orgId, org.id)));
   } catch {
     return { ok: false, error: "Couldn't save the driver. Try again." };
   }

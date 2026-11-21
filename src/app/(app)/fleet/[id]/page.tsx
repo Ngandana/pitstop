@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AlertTriangle, ChevronLeft, Pencil, Satellite, UserPlus } from "lucide-react";
+import { getCurrentOrg } from "@/lib/queries/org";
 import { getBikeDetail } from "@/lib/queries/fleet";
 import { BikeStatusBadge } from "@/components/bike-status-badge";
 import { StatusChangeForm } from "@/components/fleet/status-change-form";
@@ -16,7 +17,8 @@ export const dynamic = "force-dynamic";
 
 export default async function BikeDetailPage({ params }: PageProps<"/fleet/[id]">) {
   const { id } = await params;
-  const detail = await getBikeDetail(id);
+  const org = await getCurrentOrg();
+  const detail = await getBikeDetail(org.id, id);
   if (!detail) notFound();
 
   const {

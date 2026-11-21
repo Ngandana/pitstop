@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { organisations, serviceTypes } from "@/db/schema";
 import {
@@ -34,6 +34,7 @@ export async function updateServiceType(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Check the values." };
   }
 
+  const org = await getCurrentOrg();
   try {
     await db
       .update(serviceTypes)
@@ -42,7 +43,7 @@ export async function updateServiceType(
         defaultIntervalKm: parsed.data.defaultIntervalKm,
         defaultMaxIntervalDays: parsed.data.defaultMaxIntervalDays,
       })
-      .where(eq(serviceTypes.id, serviceTypeId));
+      .where(and(eq(serviceTypes.id, serviceTypeId), eq(serviceTypes.orgId, org.id)));
   } catch {
     return { ok: false, error: "Couldn't save. Try again." };
   }

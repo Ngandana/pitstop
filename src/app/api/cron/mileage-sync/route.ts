@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { createCartrackProviderFromEnv } from "@/lib/telematics/cartrack";
+import { db } from "@/db";
+import { users } from "@/db/schema";
+import { eq } from "drizzle-orm";
 import { syncAllBikes } from "@/lib/telematics/sync";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +35,15 @@ export async function GET(request: Request) {
     );
   }
 
-  const results = await syncAllBikes(provider);
+  // The Cartrack credentials are the platform admin's own account, so only
+  // the admin's organisation is synced with them (see orgUsesPlatformCartrack).
+  const adminEmail = process.env.OWNER_EMAIL?.trim().toLowerCase();
+  const adminUser = adminEmail
+    ? await db.query.users.findFirst({ where: eq(users.email, adminEmail) })
+    : undefined;
+  if (!adminUser) return NextResponse.json({ summary: { synced: 0, rejected: 0, failed: 0 }, results: [] });
+
+  const results = await syncAllBikes(provider, adminUser.orgId);
   const summary = {
     synced: results.filter((r) => r.status === "synced").length,
     rejected: results.filter((r) => r.status === "rejected").length,

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft, Pencil, IdCard, Phone, Bike as BikeIcon } from "lucide-react";
+import { getCurrentOrg } from "@/lib/queries/org";
 import { getDriverDetail } from "@/lib/queries/drivers";
 import { getDriverMoneySummary } from "@/lib/queries/money";
 import { getDriverPhotoUrl, getPaymentProofUrl } from "@/lib/storage";
@@ -15,7 +16,8 @@ export const dynamic = "force-dynamic";
 
 export default async function DriverDetailPage({ params }: PageProps<"/drivers/[id]">) {
   const { id } = await params;
-  const detail = await getDriverDetail(id);
+  const org = await getCurrentOrg();
+  const detail = await getDriverDetail(org.id, id);
   if (!detail) notFound();
 
   const { driver, openAssignment, assignments } = detail;

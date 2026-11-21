@@ -18,13 +18,17 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const org = await db.query.organisations.findFirst();
-  if (!org) {
-    return NextResponse.json({ summary: { assignments: 0, chargesCreated: 0 }, results: [] });
-  }
-
+  const orgs = await db.query.organisations.findMany();
   const asOf = formatInTimeZone(new Date(), "Africa/Johannesburg", "yyyy-MM-dd");
-  const results = await generateRentCharges(org.id, asOf);
+  const results = [];
+  for (const org of orgs) {
+    // One owner's failure must not stop everyone else's charges.
+    try {
+      results.push(...(await generateRentCharges(org.id, asOf)));
+    } catch (error) {
+      console.error(`Rent charge generation failed for org ${org.id}:`, error);
+    }
+  }
 
   const summary = {
     assignments: results.length,

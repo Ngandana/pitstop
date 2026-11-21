@@ -48,8 +48,10 @@ export async function listDrivers(orgId: string): Promise<DriverListRow[]> {
   );
 }
 
-export async function getDriverDetail(driverId: string) {
-  const driver = await db.query.drivers.findFirst({ where: eq(drivers.id, driverId) });
+export async function getDriverDetail(orgId: string, driverId: string) {
+  const driver = await db.query.drivers.findFirst({
+    where: and(eq(drivers.id, driverId), eq(drivers.orgId, orgId)),
+  });
   if (!driver) return null;
 
   const assignmentRows = await db

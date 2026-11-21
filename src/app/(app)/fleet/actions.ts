@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { bikes, bikeStatusHistory, odometerReadings } from "@/db/schema";
 import {
@@ -12,6 +12,7 @@ import {
   trackerReplacementSchema,
 } from "@/lib/validation/bikes";
 import { getCurrentOrg } from "@/lib/queries/org";
+import { findBikeInOrg, orgUsesPlatformCartrack } from "@/lib/queries/ownership";
 import { createDefaultServiceSchedules } from "@/lib/servicing/schedules";
 import { changeBikeStatus } from "@/lib/bikes/status";
 import { validateOdometerReading } from "@/lib/telematics/validate-odometer";
@@ -36,6 +37,9 @@ export async function createBike(_prev: FormResult | null, formData: FormData): 
 
   const org = await getCurrentOrg();
   const data = parsed.data;
+  if (data.cartrackVehicleId && !(await orgUsesPlatformCartrack(org.id))) {
+    data.cartrackVehicleId = undefined;
+  }
 
   // registration is unique per org — surface a clean error instead of a raw DB one.
   const clash = await db.query.bikes.findFirst({
@@ -117,6 +121,10 @@ export async function updateBike(
 
   const org = await getCurrentOrg();
   const data = parsed.data;
+  if (!(await findBikeInOrg(org.id, bikeId))) return { ok: false, error: "Bike not found." };
+  if (data.cartrackVehicleId && !(await orgUsesPlatformCartrack(org.id))) {
+    data.cartrackVehicleId = undefined;
+  }
 
   const clash = await db.query.bikes.findFirst({
     where: (b, { and, eq, isNull, ne }) =>
@@ -151,7 +159,7 @@ export async function updateBike(
         cartrackVehicleId: data.cartrackVehicleId ?? null,
         updatedAt: new Date(),
       })
-      .where(eq(bikes.id, bikeId));
+      .where(and(eq(bikes.id, bikeId), eq(bikes.orgId, org.id)));
   } catch {
     return { ok: false, error: "Couldn't save the bike. Try again." };
   }
@@ -178,6 +186,9 @@ export async function updateBikeStatus(
   if (REASON_REQUIRED.has(parsed.data.status) && !parsed.data.reason) {
     return { ok: false, error: "A reason is required for this status." };
   }
+
+  const org = await getCurrentOrg();
+  if (!(await findBikeInOrg(org.id, bikeId))) return { ok: false, error: "Bike not found." };
 
   try {
     await db.transaction(async (tx) => {
@@ -227,7 +238,7 @@ export async function recordTrackerReplacement(
       and(eq(b.id, bikeId), eq(b.orgId, org.id), isNull(b.deletedAt)),
   });
   if (!bike) return { ok: false, error: "Bike not found." };
-  if (!bike.cartrackVehicleId) {
+  if (!bike.cartrackVehicleId || !(await orgUsesPlatformCartrack(org.id))) {
     return { ok: false, error: "This bike isn't linked to Cartrack, so there's no tracker to re-baseline." };
   }
 
@@ -252,7 +263,7 @@ export async function recordTrackerReplacement(
       await tx
         .update(bikes)
         .set({ odometerOffsetKm: offsetKm, updatedAt: new Date() })
-        .where(eq(bikes.id, bikeId));
+        .where(and(eq(bikes.id, bikeId), eq(bikes.orgId, org.id)));
       // Override, because this reading is deliberately discontinuous with
       // the previous tracker's last value — that's the whole point of it.
       await tx.insert(odometerReadings).values({
@@ -286,6 +297,7 @@ export async function recordManualOdometerReading(
   const override = formData.get("override") === "on";
 
   const org = await getCurrentOrg();
+  if (!(await findBikeInOrg(org.id, bikeId))) return { ok: false, error: "Bike not found." };
   const [latest] = await db
     .select({ km: odometerReadings.readingKm })
     .from(odometerReadings)

@@ -2,7 +2,7 @@ import "server-only";
 import { and, desc, eq, isNull, like, sql } from "drizzle-orm";
 import { formatInTimeZone } from "date-fns-tz";
 import { db } from "@/db";
-import { drivers, reminders, users } from "@/db/schema";
+import { drivers, organisations, reminders, users } from "@/db/schema";
 import { daysUntil } from "@/lib/action-items";
 import { getDriverBalances } from "@/lib/queries/money";
 import { getDueServicesForOrg } from "@/lib/queries/servicing";
@@ -30,8 +30,26 @@ export type GenerationSummary = {
  * the brief, and must not be duplicated.
  */
 export async function generateReminders(): Promise<GenerationSummary> {
-  const org = await db.query.organisations.findFirst();
-  if (!org) return { written: 0, byTemplate: {} };
+  const orgs = await db.query.organisations.findMany();
+  const total: GenerationSummary = { written: 0, byTemplate: {} };
+  for (const org of orgs) {
+    // One owner's failure must not stop everyone else's reminders.
+    try {
+      const s = await generateRemindersForOrg(org);
+      total.written += s.written;
+      for (const [k, v] of Object.entries(s.byTemplate)) {
+        total.byTemplate[k] = (total.byTemplate[k] ?? 0) + v;
+      }
+    } catch (error) {
+      console.error(`Reminder generation failed for org ${org.id}:`, error);
+    }
+  }
+  return total;
+}
+
+async function generateRemindersForOrg(
+  org: typeof organisations.$inferSelect,
+): Promise<GenerationSummary> {
 
   const owner = await db.query.users.findFirst({ where: eq(users.orgId, org.id) });
   if (!owner) return { written: 0, byTemplate: {} };

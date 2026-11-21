@@ -29,7 +29,7 @@ function shell(title: string, bodyHtml: string): string {
           <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:12px;overflow:hidden;">
             <tr>
               <td style="background-color:#0f766e;padding:20px 24px;">
-                <span style="color:#fefdfb;font-size:18px;font-weight:700;">Pitstop</span>
+                <span style="color:#fefdfb;font-size:18px;font-weight:700;">RideStack</span>
               </td>
             </tr>
             <tr>

@@ -124,8 +124,13 @@ export async function syncBikeOdometer(params: {
 }
 
 /** Every bike with a cartrack_vehicle_id, one at a time (fleet is small; no need for concurrency limits). */
-export async function syncAllBikes(provider: TelematicsProvider): Promise<SyncOutcome[]> {
-  const bikeRows = await db.query.bikes.findMany({ where: isNull(bikes.deletedAt) });
+export async function syncAllBikes(
+  provider: TelematicsProvider,
+  orgId: string,
+): Promise<SyncOutcome[]> {
+  const bikeRows = await db.query.bikes.findMany({
+    where: and(eq(bikes.orgId, orgId), isNull(bikes.deletedAt)),
+  });
   const results: SyncOutcome[] = [];
   for (const bike of bikeRows) {
     if (!bike.cartrackVehicleId) continue;

@@ -38,7 +38,7 @@ export function TrackerReplacementForm({
   return (
     <form action={formAction} className="flex flex-col gap-3">
       <p className="text-sm text-text-secondary">
-        Fitted a new tracker? It starts counting from zero, so tell Pitstop what the bike&apos;s own
+        Fitted a new tracker? It starts counting from zero, so tell RideStack what the bike&apos;s own
         odometer reads and it will keep the real total from here on.
       </p>
 

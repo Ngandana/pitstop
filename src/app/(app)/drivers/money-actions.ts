@@ -1,9 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { payments, rentCharges } from "@/db/schema";
+import { assignments, drivers, payments, rentCharges } from "@/db/schema";
 import { recordPaymentSchema, waiveRentChargeSchema, voidPaymentSchema } from "@/lib/validation/money";
 import { getCurrentOrg } from "@/lib/queries/org";
 import { uploadPaymentProof } from "@/lib/storage";
@@ -24,6 +24,24 @@ export async function recordPayment(formData: FormData): Promise<FormResult> {
   }
   const data = parsed.data;
   const org = await getCurrentOrg();
+
+  // Both ids come from the browser — confirm they belong to this org, and
+  // that the assignment is this driver's, before anything is written.
+  const [driver, assignment] = await Promise.all([
+    db.query.drivers.findFirst({
+      where: and(eq(drivers.id, data.driverId), eq(drivers.orgId, org.id)),
+      columns: { id: true },
+    }),
+    db.query.assignments.findFirst({
+      where: and(
+        eq(assignments.id, data.assignmentId),
+        eq(assignments.orgId, org.id),
+        eq(assignments.driverId, data.driverId),
+      ),
+      columns: { id: true },
+    }),
+  ]);
+  if (!driver || !assignment) return { ok: false, error: "Driver or assignment not found." };
 
   const proofFile = formData.get("proof");
   const paymentId = crypto.randomUUID();
@@ -71,7 +89,10 @@ export async function waiveRentCharge(
   }
   const { chargeId, waivedRands, waiveReason } = parsed.data;
 
-  const charge = await db.query.rentCharges.findFirst({ where: eq(rentCharges.id, chargeId) });
+  const org = await getCurrentOrg();
+  const charge = await db.query.rentCharges.findFirst({
+    where: and(eq(rentCharges.id, chargeId), eq(rentCharges.orgId, org.id)),
+  });
   if (!charge) return { ok: false, error: "Charge not found." };
 
   const waivedCents = centsFromRands(waivedRands);
@@ -83,7 +104,7 @@ export async function waiveRentCharge(
     await db
       .update(rentCharges)
       .set({ waivedCents, waiveReason })
-      .where(eq(rentCharges.id, chargeId));
+      .where(and(eq(rentCharges.id, chargeId), eq(rentCharges.orgId, org.id)));
   } catch {
     return { ok: false, error: "Couldn't save. Try again." };
   }
@@ -106,7 +127,10 @@ export async function voidPayment(
   }
   const { paymentId, voidReason } = parsed.data;
 
-  const payment = await db.query.payments.findFirst({ where: eq(payments.id, paymentId) });
+  const org = await getCurrentOrg();
+  const payment = await db.query.payments.findFirst({
+    where: and(eq(payments.id, paymentId), eq(payments.orgId, org.id)),
+  });
   if (!payment) return { ok: false, error: "Payment not found." };
   if (payment.voidedAt) return { ok: false, error: "This payment is already voided." };
 
@@ -114,7 +138,7 @@ export async function voidPayment(
     await db
       .update(payments)
       .set({ voidedAt: new Date(), voidReason })
-      .where(eq(payments.id, paymentId));
+      .where(and(eq(payments.id, paymentId), eq(payments.orgId, org.id)));
   } catch {
     return { ok: false, error: "Couldn't save. Try again." };
   }

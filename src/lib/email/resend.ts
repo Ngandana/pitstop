@@ -15,7 +15,7 @@ function getClient(): Resend {
 // onboarding@resend.dev works with zero setup but only delivers to the
 // account's own verified address — fine for getting the pipeline right
 // before a real domain is verified.
-const FROM_ADDRESS = process.env.RESEND_FROM_ADDRESS ?? "Pitstop <onboarding@resend.dev>";
+const FROM_ADDRESS = process.env.RESEND_FROM_ADDRESS ?? "RideStack <onboarding@resend.dev>";
 
 export async function sendEmail(params: {
   to: string;

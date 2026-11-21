@@ -57,8 +57,10 @@ export async function listBikes(orgId: string): Promise<TodayBike[]> {
   );
 }
 
-export async function getBikeDetail(bikeId: string) {
-  const bike = await db.query.bikes.findFirst({ where: eq(bikes.id, bikeId) });
+export async function getBikeDetail(orgId: string, bikeId: string) {
+  const bike = await db.query.bikes.findFirst({
+    where: and(eq(bikes.id, bikeId), eq(bikes.orgId, orgId)),
+  });
   if (!bike) return null;
 
   const [assignmentRows, statusHistory, recentReadings, schedules, lastSyncAttempt, serviceHistory] =
